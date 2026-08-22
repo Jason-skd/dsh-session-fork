@@ -67,6 +67,11 @@ const NO_SQUASH: Promise<GraphRpcResult<{ readonly message: string }>> = Promise
   error: { code: 'internal', message: 'unused' },
 })
 
+const NO_REMOVE: Promise<GraphRpcResult<{ readonly message: string }>> = Promise.resolve({
+  ok: false,
+  error: { code: 'internal', message: 'unused' },
+})
+
 const SILENT_DIALOG: ViewProps['requestBranchName'] = () => Promise.resolve(undefined)
 
 function mount(
@@ -75,12 +80,13 @@ function mount(
   createBranch: ViewProps['createBranch'] = () => NO_FORK,
   requestBranchName: ViewProps['requestBranchName'] = SILENT_DIALOG,
   squashBranch: ViewProps['squashBranch'] = () => NO_SQUASH,
+  removeBranch: ViewProps['removeBranch'] = () => NO_REMOVE,
 ): Mounted {
   const container = window.document.createElement('div')
   window.document.body.appendChild(container)
   const root = createRoot(container)
   const props = {
-    sessionId: 's-view', loadGraph, loadBranches, createBranch, requestBranchName, squashBranch, t,
+    sessionId: 's-view', loadGraph, loadBranches, createBranch, requestBranchName, squashBranch, removeBranch, t,
   } as unknown as ViewProps
   act(() => { root.render(<BranchGraphView {...props} />) })
   return { root, container }
@@ -231,8 +237,10 @@ describe('row context menu + fork from here (issue #8)', () => {
     const menu = mounted.container.querySelector('[role="menu"]') ?? window.document.querySelector('[role="menu"]')
     expect(menu).not.toBeNull()
     const items = [...(menu as HTMLElement).querySelectorAll('[role="menuitem"]')]
-    expect(items.map(item => item.textContent)).toEqual(['#menu.fork', '#menu.squash'])
+    expect(items.map(item => item.textContent)).toEqual(['#menu.fork', '#menu.squash', '#menu.remove'])
     expect((items[1] as HTMLButtonElement).disabled).toBe(true)
+    // No registry row backs this session → remove stays disabled too.
+    expect((items[2] as HTMLButtonElement).disabled).toBe(true)
     await act(async () => { mounted.root.unmount() })
   })
 
@@ -303,6 +311,171 @@ describe('row context menu + fork from here (issue #8)', () => {
     expect(submissions).toEqual(['rejected'])
     expect(forkCalls).toBe(0)
     expect(window.document.body.textContent).not.toContain('#toast.forked')
+    await act(async () => { mounted.root.unmount() })
+  })
+})
+
+describe('remove branch (issue #23)', () => {
+  /** Rows carrying issue-#8 metadata (context-menu capable). */
+  const METADATA_GRAPH: GraphPayloadDto = {
+    nodes: [
+      {
+        id: 's-a:2', parentIds: ['s-a:1'], subject: 'asked for a listing',
+        sessionId: 's-a', turn: 2, endSeq: 9,
+      },
+      { id: 's-a:1', parentIds: [], subject: 'root turn', sessionId: 's-a', turn: 1, endSeq: 3 },
+    ],
+    head: 's-a:2',
+  }
+  /** The workspace registry: exp owns s-b, main owns s-a (issue-#8 rows). */
+  const REGISTRY: Promise<GraphRpcResult<readonly RegistryBranchDto[]>> = Promise.resolve({
+    ok: true,
+    value: [
+      { name: 'main', sessionId: 's-a', dangling: false, forkOrigin: null },
+      { name: 'exp', sessionId: 's-b', dangling: false, forkOrigin: { parentSessionId: 's-a', atSeq: 3 } },
+    ],
+  })
+
+  const DANGLING: Promise<GraphRpcResult<readonly RegistryBranchDto[]>> = Promise.resolve({
+    ok: true,
+    value: [
+      { name: 'main', sessionId: 's-a', dangling: false, forkOrigin: null },
+      { name: 'ghost', sessionId: 's-gone', dangling: true, forkOrigin: null },
+    ],
+  })
+
+  /** Right-click the row whose subject matches, or a dangling ref by name. */
+  function contextMenuOn(mounted: Mounted, needle: string): void {
+    const target = [...mounted.container.querySelectorAll('[role="button"]')]
+      .find(element => element.textContent?.includes(needle))
+    if (target === undefined) throw new Error(`target with "${needle}" not found`)
+    act(() => {
+      target.dispatchEvent(new window.MouseEvent('contextmenu', {
+        bubbles: true, cancelable: true, clientX: 40, clientY: 60,
+      }))
+    })
+  }
+
+  function menuItems(): HTMLButtonElement[] {
+    return [...window.document.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[]
+  }
+
+  /** Click through the gated confirmation: menu → dialog → checkbox → confirm. */
+  async function confirmRemoval(mounted: Mounted, needle: string): Promise<void> {
+    contextMenuOn(mounted, needle)
+    const item = menuItems().find(element => element.textContent === '#menu.remove')
+    if (item === undefined || item.disabled) throw new Error('remove item missing or disabled')
+    await act(async () => { item.click() })
+    // The official gated dialog: the confirm action stays disabled until
+    // the acknowledgement checkbox (the --yes parity) is checked.
+    const confirm = [...window.document.querySelectorAll('button')]
+      .find(element => element.textContent === '#remove.confirm')
+    if (confirm === undefined) throw new Error('confirm button missing')
+    expect(confirm.disabled).toBe(true)
+    const checkbox = window.document.querySelector('input[type="checkbox"]') as HTMLInputElement
+    await act(async () => {
+      checkbox.click()
+    })
+    expect(confirm.disabled).toBe(false)
+    await act(async () => { confirm.click() })
+    await flush()
+  }
+
+  test('rows of registered branches enable remove; confirm gates then removes, refreshes, toasts', async () => {
+    let graphCalls = 0
+    const removeCalls: Array<{ sessionId: string, name: string }> = []
+    const mounted = mount(
+      () => {
+        graphCalls += 1
+        return Promise.resolve(resultOf(METADATA_GRAPH))
+      },
+      () => REGISTRY,
+      () => NO_FORK,
+      SILENT_DIALOG,
+      () => NO_SQUASH,
+      async (request) => {
+        removeCalls.push(request)
+        return { ok: true, value: { message: 'removed' } }
+      },
+    )
+    await flush()
+    // The workspace key rides the view's own session, never the branch's.
+    await confirmRemoval(mounted, 'asked for a listing')
+    expect(removeCalls).toEqual([{ sessionId: 's-view', name: 'main' }])
+    expect(graphCalls).toBe(2)
+    expect(window.document.body.textContent).toContain('#toast.removedmain')
+    await act(async () => { mounted.root.unmount() })
+  })
+
+  test('cancel closes the dialog without any host round trip', async () => {
+    let removeCalls = 0
+    const mounted = mount(
+      () => Promise.resolve(resultOf(METADATA_GRAPH)),
+      () => REGISTRY,
+      () => NO_FORK,
+      SILENT_DIALOG,
+      () => NO_SQUASH,
+      async () => {
+        removeCalls += 1
+        return { ok: true, value: { message: 'removed' } }
+      },
+    )
+    await flush()
+    contextMenuOn(mounted, 'asked for a listing')
+    await act(async () => { menuItems().find(element => element.textContent === '#menu.remove')?.click() })
+    const cancel = [...window.document.querySelectorAll('button')]
+      .find(element => element.textContent === '#remove.cancel')
+    await act(async () => { cancel?.click() })
+    await flush()
+    expect(removeCalls).toBe(0)
+    expect(window.document.body.textContent).not.toContain('#toast.removed')
+    await act(async () => { mounted.root.unmount() })
+  })
+
+  test('a failing removal surfaces through a toast (dialog already closed)', async () => {
+    const mounted = mount(
+      () => Promise.resolve(resultOf(METADATA_GRAPH)),
+      () => REGISTRY,
+      () => NO_FORK,
+      SILENT_DIALOG,
+      () => NO_SQUASH,
+      async () => ({ ok: false as const, error: { code: 'internal' as const, message: 'boom', details: {} } }),
+    )
+    await flush()
+    await confirmRemoval(mounted, 'asked for a listing')
+    expect(window.document.body.textContent).toContain('#remove.failedboom')
+    await act(async () => { mounted.root.unmount() })
+  })
+
+  test('dangling refs open the menu with fork/squash disabled and remove working', async () => {
+    const removeCalls: Array<{ sessionId: string, name: string }> = []
+    const mounted = mount(
+      () => Promise.resolve(resultOf(METADATA_GRAPH)),
+      () => DANGLING,
+      () => NO_FORK,
+      SILENT_DIALOG,
+      () => NO_SQUASH,
+      async (request) => {
+        removeCalls.push(request)
+        return { ok: true, value: { message: 'removed' } }
+      },
+    )
+    await flush()
+    contextMenuOn(mounted, 'ghost')
+    const items = menuItems()
+    expect(items.map(item => item.textContent)).toEqual(['#menu.fork', '#menu.squash', '#menu.remove'])
+    expect((items[0]).disabled).toBe(true)
+    expect((items[1]).disabled).toBe(true)
+    expect((items[2]).disabled).toBe(false)
+    await act(async () => { items[2].click() })
+    const confirm = [...window.document.querySelectorAll('button')]
+      .find(element => element.textContent === '#remove.confirm')
+    const checkbox = window.document.querySelector('input[type="checkbox"]') as HTMLInputElement
+    await act(async () => { checkbox.click() })
+    await act(async () => { confirm?.click() })
+    await flush()
+    expect(removeCalls).toEqual([{ sessionId: 's-view', name: 'ghost' }])
+    expect(window.document.body.textContent).toContain('#toast.removedghost')
     await act(async () => { mounted.root.unmount() })
   })
 })

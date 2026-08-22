@@ -180,6 +180,19 @@ export function apply(ctx: Context): void {
         )
         return result as Promise<GraphRpcResult<{ readonly message: string }>>
       },
+      // Right-click "Remove branch" (issue #23): the host `removeBranch`
+      // endpoint (the /branch rm --yes semantics). The payload sessionId
+      // only resolves the workspace, so it is the view's own session.
+      removeBranch: (request: {
+        readonly sessionId: string
+        readonly name: string
+      }): Promise<GraphRpcResult<{ readonly message: string }>> => {
+        if (connection === undefined) return Promise.resolve(graphUnavailable())
+        const result: Promise<GraphRpcResult> = connection.rpc.call(
+          RPC_CHANNEL, 'removeBranch', { sessionId: request.sessionId, name: request.name },
+        )
+        return result as Promise<GraphRpcResult<{ readonly message: string }>>
+      },
     }),
   }, BranchGraphView))
 }
