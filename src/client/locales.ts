@@ -18,8 +18,16 @@ export type ForkLocaleKey =
   | 'state.dangling'
   | 'menu.fork'
   | 'menu.squash'
+  | 'menu.remove'
   | 'toast.forked'
   | 'toast.squashed'
+  | 'toast.removed'
+  | 'remove.title'
+  | 'remove.description'
+  | 'remove.acknowledge'
+  | 'remove.cancel'
+  | 'remove.confirm'
+  | 'remove.failed'
   | 'squash.title'
   | 'squash.description'
   | 'squash.placeholder'
@@ -49,8 +57,16 @@ export const zh: Record<ForkLocaleKey, string> = {
   'state.dangling': '悬空分支(会话已缺失):',
   'menu.fork': '从此处 Fork',
   'menu.squash': 'Squash 到分支',
+  'menu.remove': '删除分支',
   'toast.forked': '已创建分支 ',
   'toast.squashed': '已 squash 到分支 ',
+  'toast.removed': '已删除分支 ',
+  'remove.title': '删除分支',
+  'remove.description': '只删除分支引用,会话数据永不删除;会话仍可正常打开。此操作不可撤销。',
+  'remove.acknowledge': '我了解此操作只删除分支引用且不可撤销',
+  'remove.cancel': '取消',
+  'remove.confirm': '删除分支',
+  'remove.failed': '删除分支失败:',
   'squash.title': 'Squash 到分支',
   'squash.description': '输入目标分支名(当前仅支持本分支的父分支),本分支的独有历史将压缩为一条摘要合并过去。',
   'squash.placeholder': 'squash 到 ',
@@ -74,8 +90,16 @@ export const en: Record<ForkLocaleKey, string> = {
   'state.dangling': 'Dangling branches (session missing):',
   'menu.fork': 'Fork from here',
   'menu.squash': 'Squash into branch',
+  'menu.remove': 'Remove branch',
   'toast.forked': 'Forked branch ',
   'toast.squashed': 'Squashed into branch ',
+  'toast.removed': 'Removed branch ',
+  'remove.title': 'Remove branch',
+  'remove.description': 'Removes the branch ref only — session data is never deleted and the session stays openable. This cannot be undone.',
+  'remove.acknowledge': 'I understand this removes the branch ref only and cannot be undone',
+  'remove.cancel': 'Cancel',
+  'remove.confirm': 'Remove branch',
+  'remove.failed': 'Failed to remove branch: ',
   'squash.title': 'Squash into branch',
   'squash.description': 'Enter the target branch name (currently the parent branch of this one); this branch\u2019s own history is squashed into one summary there.',
   'squash.placeholder': 'squash into ',

@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconBranchOutline16, Menu, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutline16, Menu, RiskConfirmation, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { validateBranchName } from '../branch-name.js'
 import type { BranchNameDialogController } from './branch-name-dialog.tsx'
@@ -67,6 +67,17 @@ export interface BranchGraphInjected {
   squashBranch(request: {
     readonly sessionId: string
     readonly target: string
+  }): Promise<GraphRpcResult<{ readonly message: string }>>
+  /**
+   * Right-click "Remove branch" (issue #23): one host `removeBranch`
+   * round trip — the `/branch rm --yes` semantics (ref only, session
+   * data untouched). The payload's `sessionId` resolves the workspace,
+   * so it is always the view's own session, never the removed branch's
+   * (that one may be dangling and unresolvable).
+   */
+  removeBranch(request: {
+    readonly sessionId: string
+    readonly name: string
   }): Promise<GraphRpcResult<{ readonly message: string }>>
   /**
    * Open the shared branch-name dialog (the same controller the fork
@@ -161,9 +172,12 @@ function GraphRow({
 interface RowMenu {
   readonly x: number
   readonly y: number
-  readonly meta: RowMeta
+  /** The row's data plane; null when opened on a dangling ref (remove only). */
+  readonly meta: RowMeta | null
   /** Squash lineage facts of the row's session, when it has a fork origin. */
   readonly squashTarget: { readonly parentSessionId: string; readonly parentName: string } | null
+  /** The branch name the remove action would delete (null: no registered ref). */
+  readonly removeName: string | null
 }
 
 /** The branches graph tab body: loads over RPC, then renders the lanes. */
@@ -173,6 +187,7 @@ export function BranchGraphView({
   loadBranches,
   createBranch,
   squashBranch,
+  removeBranch,
   requestBranchName,
   t,
 }: ViewProps) {
@@ -181,6 +196,9 @@ export function BranchGraphView({
   const [branches, setBranches] = useState<readonly RegistryBranchDto[]>([])
   const [attempt, setAttempt] = useState(0)
   const [menu, setMenu] = useState<RowMenu | null>(null)
+  /** The pending remove confirmation (issue #23): branch name + checkbox gate. */
+  const [removeConfirm, setRemoveConfirm] = useState<{ readonly name: string } | null>(null)
+  const [removeAcknowledged, setRemoveAcknowledged] = useState(false)
   const [toast, setToast] = useState<{ readonly seq: number; readonly text: string } | null>(null)
   const toastSeq = useRef(0)
 
@@ -205,6 +223,31 @@ export function BranchGraphView({
     const parent = branches.find(branch => branch.sessionId === origin.parentSessionId)
     if (parent === undefined) return null
     return { parentSessionId: origin.parentSessionId, parentName: parent.name }
+  }
+
+  /**
+   * The registered branch name of one session, when it has one — the
+   * remove action's target (issue #23).
+   */
+  const branchNameOf = (sessionId: string): string | null =>
+    branches.find(branch => branch.sessionId === sessionId)?.name ?? null
+
+  /**
+   * "Remove branch" (issue #23): the official RiskConfirmation gates the
+   * host round trip behind the acknowledgement checkbox (the GUI parity
+   * of `/branch rm --yes`). On confirm the dialog closes immediately
+   * (the official PermissionRow pattern) and the failure, if any,
+   * surfaces through a toast — removal itself can never corrupt state.
+   */
+  const removeFromMenu = (name: string): void => {
+    void removeBranch({ sessionId, name }).then((result) => {
+      if (!result.ok) {
+        showToast(`${t('remove.failed')}${result.error.message}`)
+        return
+      }
+      setAttempt(current => current + 1)
+      showToast(`${t('toast.removed')}${name}`)
+    })
   }
 
   /**
@@ -335,13 +378,22 @@ export function BranchGraphView({
     return <div className={css.state}>{t('state.empty')}</div>
   }
   const menuEntries: readonly MenuEntry[] = menu === null ? [] : [
-    { id: 'fork', label: t('menu.fork') },
+    // Fork/squash are row actions: a menu opened on a dangling ref (no
+    // row meta) keeps them visible but disabled.
+    { id: 'fork', label: t('menu.fork'), disabled: menu.meta === null },
     // Squash is offered only on rows whose session has a fork origin —
     // root-branch rows keep the item visible but disabled.
     {
       id: 'squash',
       label: t('menu.squash'),
       disabled: menu.squashTarget === null,
+    },
+    // Remove is offered wherever a registered ref backs the target (the
+    // row's session, or the dangling ref itself); disabled otherwise.
+    {
+      id: 'remove',
+      label: t('menu.remove'),
+      disabled: menu.removeName === null,
     },
   ]
   return (
@@ -357,6 +409,7 @@ export function BranchGraphView({
               y: event.clientY,
               meta,
               squashTarget: squashTargetOf(meta.sessionId),
+              removeName: branchNameOf(meta.sessionId),
             })
           }}
           t={t}
@@ -366,7 +419,18 @@ export function BranchGraphView({
         <div className={css.danglingSection}>
           {t('state.dangling')}
           {dangling.map(name => (
-            <span key={name} className={css.danglingRef}>{name}</span>
+            <span
+              key={name}
+              className={css.danglingRef}
+              role="button"
+              aria-haspopup="menu"
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setMenu({ x: event.clientX, y: event.clientY, meta: null, squashTarget: null, removeName: name })
+              }}
+            >
+              {name}
+            </span>
           ))}
         </div>
       )}
@@ -382,12 +446,39 @@ export function BranchGraphView({
           const current = menu
           setMenu(null)
           if (current === null) return
-          if (id === 'fork') forkFromRow(current.meta)
-          if (id === 'squash' && current.squashTarget !== null) {
+          if (id === 'fork' && current.meta !== null) forkFromRow(current.meta)
+          if (id === 'squash' && current.meta !== null && current.squashTarget !== null) {
             squashFromRow(current.meta, current.squashTarget.parentName)
+          }
+          if (id === 'remove' && current.removeName !== null) {
+            setRemoveAcknowledged(false)
+            setRemoveConfirm({ name: current.removeName })
           }
         }}
         onClose={() => { setMenu(null) }}
+      />
+      {/* The remove confirmation (issue #23): the official gated dialog —
+       * the primary action stays disabled until the acknowledgement
+       * checkbox (the GUI parity of /branch rm --yes) is checked. */}
+      <RiskConfirmation
+        open={removeConfirm !== null}
+        title={t('remove.title')}
+        description={t('remove.description')}
+        acknowledgeLabel={t('remove.acknowledge')}
+        cancelLabel={t('remove.cancel')}
+        confirmLabel={t('remove.confirm')}
+        acknowledged={removeAcknowledged}
+        onAcknowledgedChange={setRemoveAcknowledged}
+        onCancel={() => {
+          setRemoveAcknowledged(false)
+          setRemoveConfirm(null)
+        }}
+        onConfirm={() => {
+          const target = removeConfirm
+          setRemoveAcknowledged(false)
+          setRemoveConfirm(null)
+          if (target !== null) removeFromMenu(target.name)
+        }}
       />
       {toast !== null && (
         <Toast key={toast.seq} text={toast.text} onDone={() => { setToast(null) }} />
