@@ -171,7 +171,10 @@ Acceptance:
 Candidate scope, deliberately unordered; each requires its own design note before work:
 
 - Ref hygiene: move/rename/delete branch, dangling cleanup, optional fixed pointers
-  (git-tag semantics).
+  (git-tag semantics). Update (2026-08-21, issue #23): rename/delete shipped as
+  `/branch rename`/`/branch rm --yes` (v0.0.1) plus the branch-tab remove entry
+  behind the official RiskConfirmation primitive (checkbox = `--yes` parity);
+  dangling refs are removable from the demoted section the same way.
 - Auto-review routing: intercept review-style follow-ups at `agent/pre-step` and
   redirect them into a fork, so the main branch's model never sees the question.
 - Rebase: replay a child onto a parent's advanced head; requires stale-prefix
@@ -223,3 +226,10 @@ Candidate scope, deliberately unordered; each requires its own design note befor
   in `src/squash.ts`, command wiring in `src/squash-command.ts`; acceptance
   items #1–#6 mapped 1:1 to tests (`tests/squash-e2e.test.ts`), 122 tests green;
   vendored against deepseek-harness@528c682e.
+- 2026-08-21 — Issue #23 shipped: GUI remove branch. Host `removeBranch` RPC
+  endpoint (the `/branch rm --yes` semantics over the RPC face; ref-only,
+  dangling refs included) + branch-tab menu entry gated by the official
+  RiskConfirmation primitive (acknowledgement checkbox = `--yes` parity,
+  permission-presets pattern). Removal round trips carry the view's own
+  sessionId for workspace resolution, so unresolvable dangling sessions are
+  removable. 251 tests green.
