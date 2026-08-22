@@ -32,7 +32,7 @@ import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import { branchErrorMessage } from './command.js'
 import { assembleBranchGraph, extractTurns, summarizeTurnEvents } from './graph.js'
 import type { BranchGraph, BranchLike, GraphNode, GraphNodeRef, GraphSessionLog } from './graph.js'
-import { listBranches } from './registry.js'
+import { listBranches, removeBranch } from './registry.js'
 import { executeSquash } from './squash-command.js'
 import type { SquashAgent } from './squash-command.js'
 import type { ForkOrigin, RegistryState, RegistryStore, SessionExists } from './types.js'
@@ -166,6 +166,17 @@ export interface SquashValue {
   readonly message: string
 }
 
+/** Payload contract of the `removeBranch` endpoint (issue #23 GUI remove). */
+const removeBranchPayloadSchema = z.object({
+  sessionId: z.string().min(1),
+  name: z.string().min(1),
+})
+
+/** Success value of the `removeBranch` endpoint: the command-shaped summary. */
+export interface RemoveBranchValue {
+  readonly message: string
+}
+
 /**
  * The squash execution capabilities the `squash` endpoint needs — the same
  * injection face the `/squash` command handler feeds into
@@ -208,6 +219,8 @@ export interface BranchRpcPorts {
   resolveWorkspaceKey(sessionId: string): Promise<string | null>
   /** Load the branch registry of one workspace key (never-written → empty state). */
   loadRegistry(workspaceKey: string): Promise<RegistryState>
+  /** Persist the branch registry of one workspace key (the `removeBranch` endpoint). */
+  saveRegistry(workspaceKey: string, state: RegistryState): Promise<void>
   /**
    * Read one session's log (header lineage facts + events) for graph
    * assembly — live session store first, persistence inspect as fallback.
@@ -265,6 +278,12 @@ export interface BranchRpcPorts {
  *   owning the child's parent session. Returns `{ message }` on success;
  *   every failure (busy child/parent, non-parent target, unknown branch)
  *   carries the pipeline's user-facing wording.
+ * - `removeBranch` — payload `{ sessionId, name }` (issue #23 GUI remove):
+ *   the exact `/branch rm --yes` registry semantics over the RPC face —
+ *   delete the named ref only, never session data; dangling refs are
+ *   removable the same way (their sessions are gone, the ref stays until
+ *   explicitly removed). Returns `{ message }` on success; unknown names
+ *   carry the command's user-facing wording.
  *
  * Anything else — unknown endpoints, malformed payloads, missing sessions,
  * thrown port failures — folds into `{ ok: false, error: { code: 'internal',
@@ -273,6 +292,35 @@ export interface BranchRpcPorts {
  */
 export function createBranchRpcHandler(ports: BranchRpcPorts): RpcHandler {
   return async (endpoint, payload, signal) => {
+    if (endpoint === 'removeBranch') {
+      // The GUI remove action (issue #23): the `/branch rm --yes`
+      // semantics — the confirmation lives client-side (the official
+      // RiskConfirmation checkbox gates this call), and the host deletes
+      // the ref only. Dangling refs are removable identically: the
+      // registry transform never consults session liveness.
+      try {
+        const parsed = removeBranchPayloadSchema.safeParse(payload)
+        if (!parsed.success) {
+          const issues = parsed.error.issues
+            .map(issue => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+            .join('; ')
+          return internalError(`invalid "removeBranch" payload: ${issues}`)
+        }
+        const workspaceKey = await ports.resolveWorkspaceKey(parsed.data.sessionId)
+        if (workspaceKey === null) {
+          return internalError(`no session named ${JSON.stringify(parsed.data.sessionId)} exists`)
+        }
+        const state = await ports.loadRegistry(workspaceKey)
+        const next = removeBranch(state, parsed.data.name) // throws on unknown names
+        await ports.saveRegistry(workspaceKey, next)
+        const value: RemoveBranchValue = {
+          message: `Removed branch '${parsed.data.name}'. Sessions are untouched.`,
+        }
+        return { ok: true, value }
+      } catch (error) {
+        return internalError(branchErrorMessage(error))
+      }
+    }
     if (endpoint === 'squash') {
       // The right-click squash action (issue #8): the exact `/squash`
       // command pipeline, entered through the RPC face. The child agent

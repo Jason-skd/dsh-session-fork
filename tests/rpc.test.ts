@@ -58,6 +58,8 @@ interface PortsHarness {
   readonly ports: BranchRpcPorts
   readonly resolveCalls: string[]
   readonly loadCalls: string[]
+  /** Workspaces written through the `saveRegistry` port, keyed by workspace key. */
+  readonly savedWorkspaces: Record<string, RegistryState>
 }
 
 function portsHarness(options: {
@@ -67,9 +69,11 @@ function portsHarness(options: {
 }): PortsHarness {
   const resolveCalls: string[] = []
   const loadCalls: string[] = []
+  const savedWorkspaces: Record<string, RegistryState> = {}
   return {
     resolveCalls,
     loadCalls,
+    savedWorkspaces,
     ports: {
       async resolveWorkspaceKey(sessionId) {
         resolveCalls.push(sessionId)
@@ -78,6 +82,10 @@ function portsHarness(options: {
       async loadRegistry(workspaceKey) {
         loadCalls.push(workspaceKey)
         return options.workspaces[workspaceKey] ?? { branches: {} }
+      },
+      async saveRegistry(workspaceKey, state) {
+        savedWorkspaces[workspaceKey] = state
+        options.workspaces[workspaceKey] = state
       },
       sessionExists(id) {
         return id !== 's-gone'
@@ -256,6 +264,73 @@ describe('createBranchRpcHandler', () => {
       ok: false,
       error: { code: 'internal', message: 'boom', details: {} },
     })
+  })
+})
+
+describe('createBranchRpcHandler: removeBranch endpoint', () => {
+  test('removes the ref only and persists the workspace registry (command wording)', async () => {
+    const { ports, savedWorkspaces } = portsHarness({
+      workspaces: { '/work': WORKSPACE },
+      resolve: (id) => (id === 's-live' ? '/work' : null),
+    })
+    const handler = createBranchRpcHandler(ports)
+    const result = await handler('removeBranch', { sessionId: 's-live', name: 'exp' })
+    expect(result).toEqual({
+      ok: true,
+      value: { message: `Removed branch 'exp'. Sessions are untouched.` },
+    })
+    // The dangling ref (exp → s-gone) is gone; the live ref stays; the
+    // saved state is the whole-workspace record minus the removed ref.
+    expect(Object.keys(savedWorkspaces['/work'].branches)).toEqual(['main'])
+  })
+
+  test('dangling refs are removable the same way', async () => {
+    const { ports, savedWorkspaces } = portsHarness({
+      workspaces: { '/work': WORKSPACE },
+      resolve: (id) => (id === 's-gone' ? '/work' : null),
+    })
+    const handler = createBranchRpcHandler(ports)
+    const result = await handler('removeBranch', { sessionId: 's-gone', name: 'exp' })
+    expect(result.ok).toBe(true)
+    expect(savedWorkspaces['/work'].branches.exp).toBeUndefined()
+  })
+
+  test('unknown branch names carry the command-layer wording without saving', async () => {
+    const { ports, savedWorkspaces } = portsHarness({
+      workspaces: { '/work': WORKSPACE },
+      resolve: () => '/work',
+    })
+    const handler = createBranchRpcHandler(ports)
+    const result = await handler('removeBranch', { sessionId: 's-live', name: 'nope' })
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'internal',
+        message: `no branch named 'nope'`,
+        details: {},
+      },
+    })
+    expect(savedWorkspaces['/work']).toBeUndefined()
+  })
+
+  test('missing sessions fail before any registry read or write', async () => {
+    const { ports, loadCalls, savedWorkspaces } = portsHarness({
+      workspaces: { '/work': WORKSPACE },
+      resolve: () => null,
+    })
+    const handler = createBranchRpcHandler(ports)
+    const result = await handler('removeBranch', { sessionId: 's-unknown', name: 'exp' })
+    expect(result.ok).toBe(false)
+    expect(loadCalls).toEqual([])
+    expect(savedWorkspaces['/work']).toBeUndefined()
+  })
+
+  test('malformed payloads fold into a readable internal error', async () => {
+    const { ports } = portsHarness({ workspaces: {}, resolve: () => null })
+    const handler = createBranchRpcHandler(ports)
+    const result = await handler('removeBranch', { sessionId: 's-live' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.message).toContain('invalid "removeBranch" payload')
   })
 })
 
