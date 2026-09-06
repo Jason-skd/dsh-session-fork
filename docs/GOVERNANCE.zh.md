@@ -40,7 +40,7 @@
 
 ## 合并与收尾
 
-- 工作完成后，forked branch 主动向 fork 来源执行 session 层 squash（`squash_into` <fork 来源>）；若 compact 不出有效信息，可以改用 rebase。确认 squash 到位后，通过 `send_message_by_branch` 要求 fork 来源处理交付，git 层 branch 操作由 fork 来源执行。
+- 工作完成后，forked branch 主动向 fork 来源执行 session 层 squash（`squash_into` <fork 来源>）；若 compact 不出有效信息，可以改用 `rebased_into`。确认 squash 到位后，通过 `send_message_by_branch` 要求 fork 来源处理交付，git 层 branch 操作由 fork 来源执行。
 - 开发者确认收尾时，forked branch 负责清理自己的 worktree 和本地 git branch，同时清理 `.code-workspace` 文件中对应的 worktree 条目；fork 来源负责回收（rm）它的 session branch。
 
 ## 消息与沟通
