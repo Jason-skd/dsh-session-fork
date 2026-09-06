@@ -8,7 +8,7 @@
 
 - **session branch**: a branch-shaped session created and managed by the dsh-session-fork plugin.
 - **root branch**: the branch where the user's first conversation lives; usually maps to git main (`forkOrigin` is null in code).
-- **forked branch**: every branch that is not the root branch (`forkOrigin` is non-null in code); does the hands-on work. Usually forked from the root branch, and can also be forked from another forked branch.
+- **forked branch**: every branch that is not the root branch; does the hands-on work. Usually forked from the root branch, and can also be forked from another forked branch.
 
 **Note**: a forked branch can fork further forked branches for side quests, forming a multi-level structure. In a fork relation, the initiating side is the fork source; the root branch is where the whole fork chain begins.
 
@@ -62,7 +62,7 @@ The `send_message_by_branch` tool is recommended for these scenarios:
 5. **Forked branch**: when the work is done, squash back to the root branch.
 6. **Forked branch**: wake the root branch with `send_message_by_branch` and state that the work is delivered (the squash has landed, so the root branch already knows what happened and can infer the next step — this is a wake-up only, no to-do list needs to be passed).
 7. **Root branch**: classify the task and open a PR or perform a git merge.
-8. **Root branch**: report to the user — e.g. a board of the current multi-issue progress.
+8. **Root branch**: report to the user — e.g. a board of the current progress.
 
 > Note: unless the task itself is research, research is only an adjunct to the code action.
 >
