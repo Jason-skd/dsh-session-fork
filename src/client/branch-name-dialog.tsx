@@ -22,7 +22,7 @@
  * `role="alert"` pattern) and lets the user retry with another name.
  */
 
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './BranchNameDialog.module.css'
@@ -134,7 +134,7 @@ export function createBranchNameDialog(): BranchNameDialogController {
     },
     changeDraft(draft) {
       if (state.phase !== 'open' || state.busy) return
-      setState({ ...state, draft })
+      setState({ ...state, draft, error: null })
     },
     confirm() {
       const request = pending
@@ -179,6 +179,7 @@ export function BranchNameDialog({ controller, t }: {
   t: BranchDialogTranslate
 }): ReactNode {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
+  const composingRef = useRef(false)
   return (
     <Modal
       open={state.phase === 'open'}
@@ -209,8 +210,17 @@ export function BranchNameDialog({ controller, t }: {
         placeholder={state.texts?.placeholder ?? t('fork.placeholder')}
         aria-label={state.texts?.title ?? t('fork.title')}
         onChange={(e) => { controller.changeDraft(e.target.value) }}
+        onCompositionStart={() => {
+          composingRef.current = true
+        }}
+        onCompositionEnd={() => {
+          composingRef.current = false
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !state.busy && state.draft.length > 0) controller.confirm()
+          if (e.key === 'Enter' && !composingRef.current) {
+            e.preventDefault()
+            if (!state.busy && state.draft.length > 0) controller.confirm()
+          }
         }}
       />
       {state.error !== null && (
