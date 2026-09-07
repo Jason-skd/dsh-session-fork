@@ -5,7 +5,11 @@
  * @module dsh-session-fork/tests/client-patch.test
  */
 
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { Window } from 'happy-dom'
+import { BranchNameDialog } from '../src/client/branch-name-dialog.tsx'
 import { createBranchNameDialog } from '../src/client/branch-name-dialog.tsx'
 import { installForkIntercept } from '../src/client/fork-intercept.js'
 import type {
@@ -14,6 +18,43 @@ import type {
   ForkInterceptDeps,
   SessionsServiceLike,
 } from '../src/client/fork-intercept.js'
+import { Simulate } from 'react-dom/test-utils'
+
+let window: Window
+
+beforeAll(() => {
+  window = new Window()
+  const globals = globalThis as unknown as Record<string, unknown>
+  globals.window = window
+  globals.document = window.document
+  globals.navigator = window.navigator
+  globals.IS_REACT_ACT_ENVIRONMENT = true
+})
+
+afterAll(() => {
+  const globals = globalThis as unknown as Record<string, unknown>
+  globals.IS_REACT_ACT_ENVIRONMENT = false
+  globals.document = undefined
+  globals.window = undefined
+  window.close()
+})
+const t = (key: string): string => `#${key}`
+interface MountedDialog {
+  readonly root: Root
+  readonly container: HTMLElement
+}
+
+function mountDialog(controller: ReturnType<typeof createBranchNameDialog>): MountedDialog {
+  const container = window.document.createElement('div') as unknown as HTMLElement
+  window.document.body.appendChild(container)
+  const root = createRoot(container)
+
+  act(() => {
+    root.render(<BranchNameDialog controller={controller} t={t} />)
+  })
+
+  return { root, container }
+}
 
 /** Fake sessions service recording calls, receiver identity, addressability. */
 function fakeSessions(options: { addressableFrom?: string[] } = {}): SessionsServiceLike & {
@@ -67,6 +108,39 @@ function depsHarness(overrides: Partial<ForkInterceptDeps> = {}): {
 }
 
 describe('fork-name dialog controller', () => {
+  test('Enter does not confirm while composing, but confirms after composition ends', async () => {
+    const dialog = createBranchNameDialog()
+    const request = dialog.requestName(async () => ({
+      ok: true,
+      sessionId: 'child-ime',
+    }))
+
+    dialog.changeDraft('branch')
+
+    const mounted = mountDialog(dialog)
+
+    const input = window.document.body.querySelector('input')
+    expect(input).not.toBeNull()
+
+    await act(async () => {
+      Simulate.compositionStart(input!)
+      input!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(dialog.getSnapshot().phase).toBe('open')
+
+    await act(async () => {
+      Simulate.compositionEnd(input!)
+      input!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    await expect(request).resolves.toEqual({ sessionId: 'child-ime' })
+    expect(dialog.getSnapshot().phase).toBe('closed')
+
+    await act(async () => {
+      mounted.root.unmount()
+    })
+  })
   test('accept path: submit ok resolves the child id and closes', async () => {
     const dialog = createBranchNameDialog()
     const request = dialog.requestName(async () => ({ ok: true, sessionId: 'child-9' }))
@@ -92,6 +166,25 @@ describe('fork-name dialog controller', () => {
     dialog.confirm()
     await expect(request).resolves.toEqual({ sessionId: 'child-2' })
   })
+  test('editing the draft clears a previous validation error', async () => {
+    const dialog = createBranchNameDialog()
+    const request = dialog.requestName(async () => ({
+      ok: false,
+      message: 'A branch with that name already exists.',
+    }))
+
+    dialog.confirm()
+    await Promise.resolve()
+
+    expect(dialog.getSnapshot().error).toBe('A branch with that name already exists.')
+
+    dialog.changeDraft('x')
+
+    expect(dialog.getSnapshot().error).toBeNull()
+
+    dialog.cancel()
+    await expect(request).resolves.toBeUndefined()
+  })
 
   test('cancel settles undefined; a confirm landing mid-flight after cancel is dropped', async () => {
     const dialog = createBranchNameDialog()
@@ -108,8 +201,8 @@ describe('fork-name dialog controller', () => {
 
   test('a second concurrent request settles undefined immediately', async () => {
     const dialog = createBranchNameDialog()
-    void dialog.requestName(() => new Promise(() => {}))
-    await expect(dialog.requestName(() => new Promise(() => {}))).resolves.toBeUndefined()
+    void dialog.requestName(() => new Promise(() => { }))
+    await expect(dialog.requestName(() => new Promise(() => { }))).resolves.toBeUndefined()
   })
 })
 
