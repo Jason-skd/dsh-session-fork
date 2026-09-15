@@ -1,12 +1,12 @@
 # dsh-session-fork
 
-English | [简体中文](docs/README.zh.md)
+English | [简体中文](https://github.com/Jason-skd/dsh-session-fork/blob/main/docs/README.zh.md)
 
 Sub agents and parallel development never quite deliver in today's agent apps. This project manages dsh's native, discrete sessions the way git manages branches: `fork` gives conversations inheritance, while `squash` and `rebase` give them merging — a major upgrade to the parallel-development and prompt-management experience on dsh.
 
 This is a plugin for `DeepSeek Harness`; it cannot run standalone.
 
-![branch_tab](docs/media/branch_tab.png)
+![branch_tab](https://raw.githubusercontent.com/Jason-skd/dsh-session-fork/main/docs/media/branch_tab.png)
 
 ## Pain points it solves
 
