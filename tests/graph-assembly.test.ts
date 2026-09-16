@@ -288,6 +288,29 @@ describe('extractTurns', () => {
       { turn: 2, startSeq: 3, endSeq: 6, startTime: 2, subject: 'post-rebase prompt' },
     ])
   })
+
+  test('a branch-message envelope between turns emits its own row', () => {
+    const events = [
+      ...sessionEvents([{ turn: 1, subject: 'target prompt', time: 1 }]),
+      {
+        seq: 3, type: 'user/message', time: 2,
+        data: {
+          role: 'user',
+          content: [{ type: 'text', text: 'This is a message from branch "exp" into branch "main".\nuser: hello' }],
+          source: { kind: 'plugin', plugin: 'dsh-session-fork', form: 'notice' },
+        },
+      },
+      ...sessionEvents([{ turn: 2, subject: 'later prompt', time: 4 }])
+        .map(event => ({ ...event, seq: event.seq + 5 })),
+    ]
+    expect(extractTurns(events)).toEqual([
+      { turn: 1, startSeq: 0, endSeq: 2, startTime: 1, subject: 'target prompt' },
+      { turn: 3, startSeq: 3, endSeq: 3, startTime: 2,
+        subject: 'This is a message from branch "exp" into branch "main".',
+        transferOf: { kind: 'message', fromName: 'exp' } },
+      { turn: 2, startSeq: 5, endSeq: 7, startTime: 4, subject: 'later prompt' },
+    ])
+  })
 })
 
 /** The canonical workspace: root session + one forked child. */
@@ -611,6 +634,76 @@ describe('assembleBranchGraph', () => {
           role: 'user',
           content: [{ type: 'text', text: 'This is a rebased-into from branch "exp" into branch "main".' }],
           source: { kind: 'plugin', plugin: 'dsh-session-fork', form: 'recall' },
+        },
+      },
+    ]
+    const logs = new Map<string, GraphSessionLog>([
+      ['s-root', { header: {}, events: rootEvents }],
+      ['s-new', { header: { inheritedEventCount: graftSeq + 1, parentSession: 's-root' },
+        events: [...rootEvents, ...sessionEvents([{ turn: 2, subject: 'new branch work', time: 30 }])
+          .map(event => ({ ...event, seq: event.seq + graftSeq + 1 }))] }],
+    ])
+    const branches: BranchLike[] = [
+      { name: 'main', sessionId: 's-root', forkOrigin: null },
+      { name: 'new', sessionId: 's-new', forkOrigin: { parentSessionId: 's-root', atSeq: graftSeq } },
+    ]
+    const graph = await assembleBranchGraph(branches, 's-root', readerOf(logs).readSession)
+    const byId = new Map(graph.nodes.map(node => [node.id, node]))
+    expect(byId.get('s-new:2')?.parentIds).toEqual(['s-root:1'])
+  })
+
+  test('a branch-message row is a plain single-parent commit even when the source branch is registered', async () => {
+    // A message from branch exp to main appears as a single node on main's
+    // chain — no cross-branch joining lane is drawn, matching the rebased-into precedent.
+    const rootTurns = sessionEvents([
+      { turn: 1, subject: 'first', time: 10 },
+      { turn: 2, subject: 'second', time: 20 },
+    ])
+    const graftSeq = rootTurns.length
+    const later = sessionEvents([{ turn: 3, subject: 'after message', time: 40 }])
+      .map(event => ({ ...event, seq: event.seq + graftSeq + 1 }))
+    const rootEvents: GraphEvent[] = [
+      ...rootTurns,
+      {
+        seq: graftSeq, type: 'user/message', time: 30,
+        data: {
+          role: 'user',
+          content: [{ type: 'text', text: 'This is a message from branch "exp" into branch "main".\nuser: hello from exp' }],
+          source: { kind: 'plugin', plugin: 'dsh-session-fork', form: 'notice' },
+        },
+      },
+      ...later,
+    ]
+    const expEvents = sessionEvents([{ turn: 1, subject: 'experiment', time: 25 }])
+    const logs = new Map<string, GraphSessionLog>([
+      ['s-root', { header: {}, events: rootEvents }],
+      ['s-exp', { header: { inheritedEventCount: 0, parentSession: 's-root' }, events: expEvents }],
+    ])
+    const branches: BranchLike[] = [
+      { name: 'main', sessionId: 's-root', forkOrigin: null },
+      { name: 'exp', sessionId: 's-exp', forkOrigin: { parentSessionId: 's-root', atSeq: endSeqOf(rootTurns, 2) } },
+    ]
+    const graph = await assembleBranchGraph(branches, 's-root', readerOf(logs).readSession)
+    const byId = new Map(graph.nodes.map(node => [node.id, node]))
+    expect(byId.get('s-root:s6')?.subject).toBe('This is a message from branch "exp" into branch "main".')
+    // Single parent only — no 's-exp:1' second parent, no merge lane.
+    expect(byId.get('s-root:s6')?.parentIds).toEqual(['s-root:2'])
+    expect(byId.get('s-root:3')?.parentIds).toEqual(['s-root:s6'])
+  })
+
+  test('a branch-message row never anchors a fork', async () => {
+    // A fork anchored (atSeq) on the message row's seq must fall back to the
+    // previous real turn: message rows carry no kernel turn handle and transferOf is set.
+    const rootTurns = sessionEvents([{ turn: 1, subject: 'first', time: 10 }])
+    const graftSeq = rootTurns.length
+    const rootEvents: GraphEvent[] = [
+      ...rootTurns,
+      {
+        seq: graftSeq, type: 'user/message', time: 20,
+        data: {
+          role: 'user',
+          content: [{ type: 'text', text: 'This is a message from branch "exp" into branch "main".' }],
+          source: { kind: 'plugin', plugin: 'dsh-session-fork', form: 'notice' },
         },
       },
     ]

@@ -192,11 +192,11 @@ describe('parseTransferPreamble (machine contract of the preamble)', () => {
     const rebasedInto: BranchEventFacts = { kind: 'rebased-into', from: 'exp', to: 'main' }
     expect(parseTransferPreamble(text(buildBranchEnvelope(rebasedInto, 'body'))))
       .toEqual({ kind: 'rebased-into', fromName: 'exp' })
+    const messageFacts: BranchEventFacts = { kind: 'message', from: 'feat/review', to: 'main' }
+    expect(parseTransferPreamble(text(buildBranchEnvelope(messageFacts, 'please handle'))))
+      .toEqual({ kind: 'message', fromName: 'feat/review' })
   })
   test('non-transfer texts yield null', () => {
-    // A message envelope is peer input, not a transfer row.
-    const messageFacts: BranchEventFacts = { kind: 'message', from: 'feat/review', to: 'main' }
-    expect(parseTransferPreamble(text(buildBranchEnvelope(messageFacts, 'please handle')))).toBeNull()
     // Notice lines are one-liners, not envelopes.
     expect(parseTransferPreamble(branchNoticeLines.forkChild(forkFacts))).toBeNull()
     expect(parseTransferPreamble(branchNoticeLines.forkParent(forkFacts))).toBeNull()

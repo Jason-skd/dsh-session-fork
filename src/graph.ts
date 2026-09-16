@@ -90,7 +90,7 @@ export interface TurnSlice {
  * registered branch carries (e.g. after a rename) degrades by omission.
  */
 export interface TransferFacts {
-  readonly kind: 'squash' | 'rebased-into'
+  readonly kind: 'squash' | 'rebased-into' | 'message'
   readonly fromName: string
 }
 
@@ -102,17 +102,16 @@ function firstLine(text: string): string {
 
 /**
  * The transfer facts when `data` is a branch-event transfer envelope user
- * message (a `/squash` merge checkpoint or a `/rebased into` transcript),
- * else null. Detection is two-keyed: a plugin source this plugin or the
- * official compaction owns (`kind: 'plugin'` with plugin `dsh-session-fork`
- * or `compact`), and the machine-contract preamble parsed by
- * src/branch-events.ts `parseTransferPreamble` — the frozen session-format
- * plugin-source vocabulary admits no structured provenance members, so the
- * self-describing preamble text IS the durable machine record. Every
- * delivered transfer carries it; `message` envelopes and plain notices do
- * not match. That is what separates transfer envelopes from dsh's own
- * `/compact` checkpoints and every other plugin message, which stay
- * filtered.
+ * message (a `/squash` merge checkpoint, a `/rebased into` transcript, or a
+ * `send_message_by_branch` message), else null. Detection is two-keyed: a
+ * plugin source this plugin or the official compaction owns (`kind: 'plugin'`
+ * with plugin `dsh-session-fork` or `compact`), and the machine-contract
+ * preamble parsed by src/branch-events.ts `parseTransferPreamble` — the
+ * frozen session-format plugin-source vocabulary admits no structured
+ * provenance members, so the self-describing preamble text IS the durable
+ * machine record. Every delivered transfer carries it; plain notices do not
+ * match. That is what separates transfer envelopes from dsh's own `/compact`
+ * checkpoints and every other plugin message, which stay filtered.
  */
 function transferFactsOf(data: unknown): TransferFacts | null {
   if (data === null || typeof data !== 'object') return null
