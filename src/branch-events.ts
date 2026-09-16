@@ -236,7 +236,7 @@ export function buildBranchEnvelope(
 /** The transfer facts recoverable from an envelope preamble. */
 export interface TransferPreamble {
   /** Which transfer produced the envelope. */
-  readonly kind: 'squash' | 'rebased-into'
+  readonly kind: 'squash' | 'rebased-into' | 'message'
   /** The source branch's NAME at event time (point-in-time, like a commit message). */
   readonly fromName: string
 }
@@ -249,11 +249,11 @@ export interface TransferPreamble {
  * session-title pipeline, which does not forbid double quotes; a name that
  * contains one simply fails the anchored match (the row then degrades to a
  * non-transfer plugin message — no row, no edge — never a wrong fact).
- * Non-transfer texts (message envelopes, notices, user prose) yield null.
+ * Non-transfer texts (notices, user prose) yield null.
  * @param text - complete message text of any user message.
- * @returns the transfer facts for squash/rebased-into envelopes, else null.
+ * @returns the transfer facts for squash/rebased-into/message envelopes, else null.
  */
 export function parseTransferPreamble(text: string): TransferPreamble | null {
-  const match = /^This is a (squash|rebased-into) from branch "([^"]+)"(?: \([^)]*\))? into branch "/.exec(text)
+  const match = /^This is a (squash|rebased-into|message) from branch "([^"]+)"(?: \([^)]*\))? into branch "/.exec(text)
   return match === null ? null : { kind: match[1] as TransferPreamble['kind'], fromName: match[2]! }
 }
