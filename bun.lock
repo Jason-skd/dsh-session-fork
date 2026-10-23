@@ -71,6 +71,7 @@
         "clsx": "^2.0.0",
         "diff": "^9.0.0",
         "happy-dom": "^20.11.6",
+        "immer": "^10.1.1",
         "katex": "^0.18.7",
         "lightningcss": "^1.32.0",
         "mdast-util-from-markdown": "^2.0.3",
@@ -91,26 +92,45 @@
         "simple-icons": "16.31.0",
         "tsdown": "^0.22.2",
         "typescript": "^5.9.3",
+        "zustand": "~4.5.7",
       },
       "peerDependencies": {
         "@deepseek-ai/cordis": "^4.0.5",
+        "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-commands": "0.2.1-rc.2",
         "@deepseek-ai/dsh-compaction": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-host-webserver": "0.2.1-rc.2",
         "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-session-persistence": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-session-projection": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-session-query": "0.2.1-rc.2",
         "@deepseek-ai/dsh-session-title": "0.2.1-rc.2",
         "@deepseek-ai/dsh-storage-domain": "0.2.1-rc.2",
         "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
         "@deepseek-ai/dsh-token-meter": "0.2.1-rc.2",
         "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+        "@deepseek-ai/dsh-workspace": "0.2.1-rc.2",
       },
       "optionalPeers": [
         "@deepseek-ai/cordis",
+        "@deepseek-ai/dsh-agent",
+        "@deepseek-ai/dsh-agent-preset-registry",
+        "@deepseek-ai/dsh-commands",
         "@deepseek-ai/dsh-compaction",
+        "@deepseek-ai/dsh-host-webserver",
         "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-session",
+        "@deepseek-ai/dsh-session-persistence",
+        "@deepseek-ai/dsh-session-projection",
+        "@deepseek-ai/dsh-session-query",
         "@deepseek-ai/dsh-session-title",
         "@deepseek-ai/dsh-storage-domain",
         "@deepseek-ai/dsh-system-prompt",
         "@deepseek-ai/dsh-token-meter",
         "@deepseek-ai/dsh-tools",
+        "@deepseek-ai/dsh-workspace",
       ],
     },
   },
@@ -523,6 +543,8 @@
 
     "html-void-elements": ["html-void-elements@3.0.0", "", {}, "sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg=="],
 
+    "immer": ["immer@10.2.0", "", {}, "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw=="],
+
     "import-without-cache": ["import-without-cache@0.4.0", "", {}, "sha512-NkJQA7oZ4YHQhd2+H3BoRFKF3d/XNsiKpHZCQEMH9pDX27hQQLsTyOocyRgaIVtf8gHX3Nt3LPkR4e5EdtPAGQ=="],
 
     "ipaddr.js": ["ipaddr.js@2.5.0", "", {}, "sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w=="],
@@ -761,6 +783,8 @@
 
     "unist-util-visit-parents": ["unist-util-visit-parents@6.0.2", "", { "dependencies": { "@types/unist": "^3.0.0", "unist-util-is": "^6.0.0" } }, "sha512-goh1s1TBrqSqukSc8wrjwWhL0hiJxgA8m4kFxGlQ+8FYQ3C/m11FcTs4YYem7V664AhHVvgoQLk890Ssdsr2IQ=="],
 
+    "use-sync-external-store": ["use-sync-external-store@1.7.0", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A=="],
+
     "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
 
     "verkit": ["verkit@0.3.2", "", {}, "sha512-zj/ob3UsvJGN0whEAKFp53REA5X66hvffVqoCtVQAakJKnKlH+/PcOfMoFwIG/o4rElqLv/ycAFlx8ZlXUorCg=="],
@@ -784,6 +808,8 @@
     "yuku-parser": ["yuku-parser@0.8.7", "", { "dependencies": { "@yuku-toolchain/types": "^0.8.7", "yuku-ast": "^0.8.7" }, "optionalDependencies": { "@yuku-parser/binding-android-arm64": "0.8.7", "@yuku-parser/binding-darwin-arm64": "0.8.7", "@yuku-parser/binding-darwin-x64": "0.8.7", "@yuku-parser/binding-freebsd-x64": "0.8.7", "@yuku-parser/binding-linux-arm-gnu": "0.8.7", "@yuku-parser/binding-linux-arm-musl": "0.8.7", "@yuku-parser/binding-linux-arm64-gnu": "0.8.7", "@yuku-parser/binding-linux-arm64-musl": "0.8.7", "@yuku-parser/binding-linux-x64-gnu": "0.8.7", "@yuku-parser/binding-linux-x64-musl": "0.8.7", "@yuku-parser/binding-win32-arm64": "0.8.7", "@yuku-parser/binding-win32-x64": "0.8.7" } }, "sha512-vRD9nwt4L3aYpxNqeSC4WqLv58xrXef0Ong1Mc45CTXTIpvLafx7JO05sczmQZwdLEZvywrLOGdNC5+Rp5N1BQ=="],
 
     "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
+
+    "zustand": ["zustand@4.5.7", "", { "dependencies": { "use-sync-external-store": "^1.2.2" }, "peerDependencies": { "@types/react": ">=16.8", "immer": ">=9.0.6", "react": ">=16.8" }, "optionalPeers": ["@types/react", "immer", "react"] }, "sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw=="],
 
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 
