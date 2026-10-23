@@ -60,12 +60,12 @@ function checkpointUserMessage(compactionId: string, text: string): UserMessage 
   })
 }
 
-/** Minimal fake agent around a session, a phase kind, and an inject spy. */
+/** Minimal fake agent around a session, a status, and an inject spy. */
 function fakeAgent(session: Session, phaseKind: string): Agent & { injected: UserMessage[] } {
   const injected: UserMessage[] = []
   return {
     session,
-    phase: { kind: phaseKind },
+    status: phaseKind,
     injected,
     inject(message: UserMessage) { injected.push(message) },
   } as unknown as Agent & { injected: UserMessage[] }
@@ -193,7 +193,7 @@ describe('executeSquashAction', () => {
     expect(body).toContain('<branch-squash>\nsummary body\n</branch-squash>')
     const source = injected.source as Record<string, unknown>
     expect(isCompactCheckpointSource(injected.source)).toBe(true)
-    expect(Object.keys(source).sort()).toEqual(['compactionId', 'form', 'kind', 'plugin', 'summary'])
+    expect(Object.keys(source).sort()).toEqual(['compactionId', 'kind'])
     expect(source.compactionId).toBe('compaction-1')
 
     // The parent was flushed (and the child flushed through the compact
@@ -204,7 +204,7 @@ describe('executeSquashAction', () => {
 
   test('a busy child fails fast with the squash busy wording', async () => {
     const { deps } = makeDefs()
-    ;(deps.childAgent as unknown as { phase: { kind: string } }).phase = { kind: 'running' }
+    ;(deps.childAgent as unknown as { status: string }).status = 'running'
     const result = await executeSquashAction({ kind: 'squash', target: 'main' }, deps)
     expect(result.kind).toBe('error')
     expect(result.kind === 'error' && result.text).toContain('not idle')

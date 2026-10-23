@@ -11,7 +11,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the 'conversation.view' SlotMap row (declared by the slot's
@@ -20,6 +20,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: the 'shell.overlay' hole (declared by ui-layout's AppFrame
 // registration) must be in the program for the overlay register call to type.
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { BranchGraphView, type BranchGraphInjected } from './BranchGraphView.tsx'
 import {
   BranchNameDialog,
@@ -33,11 +36,11 @@ import {
 } from './fork-intercept.js'
 import { validateBranchName } from '../branch-name.js'
 import {
-  RPC_CHANNEL,
   type GraphPayloadDto,
   type GraphRpcResult,
   type RegistryBranchDto,
 } from './graph-model.ts'
+import { RPC_CHANNEL } from '../rpc-contract.js'
 import { en, NS, zh } from './locales.ts'
 
 /**
@@ -56,8 +59,8 @@ interface ConnectionLike {
   }
 }
 
-/** Required services: the slot system, the locale service, the wire, and the shared sessions service. */
-export const inject = ['slots', 'locale', 'connection', 'sessions'] as const
+/** Required services: rendering, locale, wire, Sessions, and navigation. */
+export const inject = ['slots', 'locale', 'connection', 'sessions', 'uiSession', 'uiWorkspace'] as const
 
 /** A connection-less host still renders the tab, in its error state. */
 function graphUnavailable(): GraphRpcResult<never> {
@@ -94,6 +97,7 @@ export function apply(ctx: Context): void {
   const t = ctx.locale.bind(NS)
   const connection = ctx.get('connection') as ConnectionLike | undefined
   const sessions = ctx.get('sessions') as SessionsServiceLike
+  const navigation = ctx.get('uiWorkspace') as { openSession(sessionId: string): void } | undefined
 
   // Issue #3: intercept the official fork entries (sidebar row menu +
   // turn-tail branch button) and route them through the name dialog and
@@ -103,7 +107,7 @@ export function apply(ctx: Context): void {
   // interception (issue #3) and the graph's right-click actions (issue
   // #8) — the overlay below renders whatever request is open.
   const dialog = createBranchNameDialog()
-  if (connection !== undefined) {
+  if (connection !== undefined && navigation !== undefined) {
     installForkIntercept({
       sessions,
       requestName: dialog.requestName,
@@ -112,6 +116,7 @@ export function apply(ctx: Context): void {
       callFork: (payload) =>
         connection.rpc.call(RPC_CHANNEL, 'fork', payload) as Promise<ForkEndpointResult>,
       waitForSession: (sessionId) => waitForAddressable(sessions, sessionId),
+      openSession: (sessionId) => { navigation.openSession(sessionId) },
     })
     // The dialog mounts as a root-scope overlay entry: the shell's own
     // full-app overlay hole (declared by ui-layout's AppFrame), rendering

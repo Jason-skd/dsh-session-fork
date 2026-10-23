@@ -112,7 +112,7 @@ function harness(): Harness {
         notifications.push({
           sessionId,
           text: (notice.content[0] as { type: 'text'; text: string }).text,
-          summary: notice.source.kind === 'plugin' ? notice.source.summary : '',
+          summary: notice.source.kind === 'dsh-session-fork' ? notice.source.summary : '',
         })
       },
     },

@@ -14,9 +14,6 @@ import type {
   ISCMHistoryItemViewModel,
 } from './vendor/vscode/types.js'
 
-/** Host RPC channel this plugin owns (mirror of the host-side constant). */
-export const RPC_CHANNEL = '/dsh-session-fork'
-
 /**
  * Structural slice of dsh's client-side `RpcResult<T>` as the view consumes
  * it (success value or a displayable error message; never thrown here).

@@ -21,7 +21,6 @@ import {
   SquashCoreError,
   turnRangeOf,
 } from '../src/squash.js'
-import type { MergeCheckpointSource } from '../src/squash.js'
 
 /** One raw fake log event; its array index becomes its seq. */
 interface FakeEvent {
@@ -357,13 +356,7 @@ describe('buildMergeCheckpoint', () => {
     // the official compaction-checkpoint members, notice-formed for the UI
     // row — no fork-merge extensions (they would make the log unloadable
     // under the format read path; 2026-09-05 incident).
-    expect(merged.source).toEqual({
-      kind: 'plugin',
-      plugin: 'compact',
-      form: 'notice',
-      summary: 'squash: review → main',
-      compactionId: CompactionId('child-compaction'),
-    })
+    expect(merged.source).toEqual(compactCheckpointSource(CompactionId('child-compaction')))
   })
 
   test('omits the range clause when no turn range is known', () => {
@@ -394,7 +387,7 @@ describe('buildMergeCheckpoint', () => {
       compactionId: CompactionId('child-compaction'),
       sourceCommandId: 'cmd-7' as CommandId,
     }, names)
-    const source = merged.source as MergeCheckpointSource
+    const source = merged.source as ReturnType<typeof compactCheckpointSource>
     expect(source.sourceCommandId).toBe('cmd-7')
     expect(isCompactCheckpointSource(merged.source)).toBe(true)
   })

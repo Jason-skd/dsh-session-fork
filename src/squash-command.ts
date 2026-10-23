@@ -55,13 +55,8 @@ export function parseSquashAction(rawInput: string): SquashAction {
   return { kind: 'squash', target: second }
 }
 
-/**
- * The child agent shape squash needs: the public `Agent` plus the runtime
- * phase marker the agent-loop implementation carries. ONLY the child idle
- * gate needs this internal reach (the vendored `runMaintenance` idle
- * contract); the parent is delivered to through the public interface alone.
- */
-export type SquashChildAgent = Agent & { readonly phase: { readonly kind: string } }
+/** The public Agent surface used by squash. */
+export type SquashChildAgent = Agent
 
 /** Capabilities one `/squash` execution needs. */
 export interface SquashCommandDeps {
@@ -183,7 +178,7 @@ export async function executeSquash(
   // fast local check gives the squash-specific wording immediately. (The
   // mid-turn handoff in src/squash-midturn.ts routes running sources here
   // only once they reach idle.)
-  if (deps.childAgent.phase.kind !== 'idle') {
+  if (deps.childAgent.status !== 'idle') {
     return { kind: 'error', text: squashErrorText('busy') }
   }
 

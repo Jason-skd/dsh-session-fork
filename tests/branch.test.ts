@@ -251,7 +251,7 @@ describe('createBranchFrom', () => {
     const source = (event.data as { source: Record<string, unknown> }).source
     // The notice source stays inside the frozen plugin vocabulary; the fork
     // facts ride the self-describing text (2026-09-05 source re-baseline).
-    expect(Object.keys(source).sort()).toEqual(['form', 'kind', 'plugin', 'summary'])
+    expect(Object.keys(source).sort()).toEqual(['form', 'kind', 'summary'])
   })
 })
 

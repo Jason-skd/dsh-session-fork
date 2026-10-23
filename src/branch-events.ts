@@ -3,16 +3,12 @@
  * (fork, squash, rebased-into, adopt, rename, message) renders an AI-visible
  * provenance message.
  *
- * Design contract (agreed 2026-08-22; source shape re-baselined 2026-09-05):
+ * Design contract (agreed 2026-08-22; V4 source shape re-baselined
+ * 2026-10-23):
  *
- * - Every branch event is ONE `user/message`. The message `source` carries
- *   ONLY members of the frozen session-format plugin-source vocabulary —
- *   `kind`, `plugin`, `form`, `summary` (plus `compactionId`/
- *   `sourceCommandId` under `plugin: 'compact'`; deepseek-harness
- *   session-format-v0-to-v1/src/payload-validation.ts `pluginSourceValue`).
- *   The format's read path rejects unknown source members and thereby makes
- *   the whole session log unloadable, so structured provenance must NOT
- *   ride the source (2026-09-05 incident: `branchEvent` poisoned 66 logs).
+ * - Every branch event is ONE `user/message`. The message source uses this
+ *   plugin's producer-owned kind (`dsh-session-fork`) and a current context
+ *   form. V4 rejects the retired generic `kind: 'plugin'` wrapper.
  * - The `content` text is ALWAYS self-describing — and for the transfer
  *   kinds (squash, rebased-into) the preamble additionally is the MACHINE
  *   contract: {@link parseTransferPreamble} recovers `{kind, fromName}`
@@ -36,7 +32,7 @@
  */
 
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, UserMessage } from '@deepseek-ai/dsh-llm'
 
 /** The branch operations that emit AI-visible provenance messages. */
 export type BranchEventKind = 'fork' | 'squash' | 'rebased-into' | 'adopt' | 'rename' | 'message'
@@ -65,28 +61,29 @@ export interface BranchEventFacts {
 }
 
 /**
- * The message source of a branch event: EXACTLY the frozen plugin-source
- * vocabulary of the session format (`kind`/`plugin`/`form`, with `summary`
- * admitted only on the notice form; deepseek-harness
- * session-format-v0-to-v1 `pluginSourceValue`). Unknown members make a
- * session log refuse to load under the format read path, so
- * machine-readable provenance lives in the preamble text instead — see
- * {@link parseTransferPreamble}.
+ * The producer-owned source of a branch event. Machine-readable transfer
+ * provenance remains in the preamble so historical V3 plugin sources can
+ * migrate without losing branch semantics.
  */
 export type BranchEventSource =
   | {
-    readonly kind: 'plugin'
-    readonly plugin: 'dsh-session-fork'
+    readonly kind: 'dsh-session-fork'
     readonly form: 'notice'
     /** One-line UI account, bounded to the official 120-char notice limit. */
     readonly summary: string
   }
   | {
-    readonly kind: 'plugin'
-    readonly plugin: 'dsh-session-fork'
+    readonly kind: 'dsh-session-fork'
     /** Recall-form material lifted from another session's log carries no summary. */
     readonly form: 'recall'
   }
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'dsh-session-fork': { readonly kind: 'dsh-session-fork' } & ContextFormed
+    'compact-basic': { readonly kind: 'compact-basic' }
+  }
+}
 
 /**
  * Build a one-line branch event notice: no payload, no tags. Used for fork
@@ -104,8 +101,7 @@ export function buildBranchNotice(
   return createUserMessage({
     content: [{ type: 'text', text: line }],
     source: {
-      kind: 'plugin',
-      plugin: 'dsh-session-fork',
+      kind: 'dsh-session-fork',
       form: 'notice',
       summary: boundContextSummary(`${facts.kind}: ${facts.from} → ${facts.to}`),
     } satisfies BranchEventSource,
@@ -220,10 +216,9 @@ export function buildBranchEnvelope(
   // recall-form rebased-into envelope carries none — its preamble line is
   // the self-describing account.
   const source: BranchEventSource = facts.kind === 'rebased-into'
-    ? { kind: 'plugin', plugin: 'dsh-session-fork', form: 'recall' }
+    ? { kind: 'dsh-session-fork', form: 'recall' }
     : {
-      kind: 'plugin',
-      plugin: 'dsh-session-fork',
+      kind: 'dsh-session-fork',
       form: 'notice',
       summary: boundContextSummary(`${facts.kind}: ${facts.from} → ${facts.to}`),
     }

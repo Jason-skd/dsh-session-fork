@@ -159,12 +159,12 @@ function harness(seedState: RegistryState | null = null): Harness {
   return h
 }
 
-/** A phase-carrying fake agent, the transfer tools' source shape. */
+/** A status-carrying fake agent, the transfer tools' source shape. */
 function fakeAgent(sessionId: string, phase: 'idle' | 'running'): Record<string, unknown> {
   return {
     session: { id: sessionId, header: { cwd: '/w' } },
-    phase: { kind: phase },
-    inbox: { hasPending: false, nextStep: [], nextTurn: [] },
+    status: phase,
+    inbox: { nextStep: [], nextTurn: [] },
   }
 }
 
@@ -371,7 +371,7 @@ describe('transfer tools: squash_into / rebased_into', () => {
     const defs = transferToolDefinitions(h.ports)
     const running = {
       ...fakeAgent('s-parent', 'running'),
-      inbox: { hasPending: true, nextStep: [{}], nextTurn: [] },
+      inbox: { nextStep: [{}], nextTurn: [] },
     }
     const value = await toolBy(defs, 'squash_into').execute(
       { into: 'main' },

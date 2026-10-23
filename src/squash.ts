@@ -14,6 +14,7 @@
 
 import {
   CompactionId,
+  compactCheckpointSource,
   isCompactCheckpointSource,
   toolPairingBalancedAfter,
   toolPairingBalancedBefore,
@@ -225,24 +226,6 @@ export interface MergeProvenance {
 }
 
 /**
- * The merge checkpoint's message source: the OFFICIAL compaction checkpoint
- * shape (`plugin: 'compact'` + `compactionId`), notice-formed for the UI
- * row. It carries no fork-merge extensions — the frozen session-format
- * plugin-source vocabulary admits none, and `isCompactCheckpointSource`
- * consumers must keep recognizing this node as a compaction checkpoint.
- * The transfer facts live in the envelope preamble (src/branch-events.ts
- * `parseTransferPreamble`).
- */
-export interface MergeCheckpointSource {
-  readonly kind: 'plugin'
-  readonly plugin: 'compact'
-  readonly form: 'notice'
-  readonly summary: string
-  readonly compactionId: CompactionId
-  readonly sourceCommandId?: CommandId
-}
-
-/**
  * Registry-resolved branch names for the merge envelope, resolved by the
  * command layer BEFORE building (names are point-in-time facts, exactly like
  * commit messages).
@@ -287,14 +270,9 @@ export function turnRangeOf(
  * wrapped in the shared branch-event envelope, with the official compaction
  * checkpoint identity riding the source.
  *
- * Guard compatibility: `isCompactCheckpointSource` requires
- * `plugin === 'compact'` (dsh-compaction checkpoint.ts), so the source uses
- * the official marker plus `compactionId` — the merged node stays a
- * recognized compaction checkpoint for every official consumer, and the
- * source stays inside the frozen plugin-source vocabulary (the format read
- * path rejects unknown members; 2026-09-05 incident). The fork-merge facts
- * ride the preamble text, where `parseTransferPreamble` recovers them for
- * the branch graph.
+ * The source comes from the official correlated checkpoint constructor,
+ * keeping the merged node recognizable by every compaction consumer. The
+ * fork-merge facts ride the preamble text.
  * @param checkpointMessage - the child's checkpoint message from {@link extractCheckpointMessage}.
  * @param provenance - compaction facts to record on the source.
  * @param branchNames - registry-resolved child and target branch names.
@@ -321,14 +299,7 @@ export function buildMergeCheckpoint(
         payload,
       ),
     }],
-    source: {
-      kind: 'plugin',
-      plugin: 'compact',
-      form: 'notice',
-      summary: boundContextSummary(`squash: ${branchNames.child} → ${branchNames.target}`),
-      compactionId: provenance.compactionId,
-      ...provenance.sourceCommandId === undefined ? {} : { sourceCommandId: provenance.sourceCommandId },
-    } satisfies MergeCheckpointSource,
+    source: compactCheckpointSource(provenance.compactionId, provenance.sourceCommandId),
   })
 }
 

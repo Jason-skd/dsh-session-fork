@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ManualCompactionError } from '@deepseek-ai/dsh-compaction'
+import { ManualCompactionError, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -58,13 +58,7 @@ function fakeSession(
 function checkpointUserMessage(compactionId: string, text: string): UserMessage {
   return createUserMessage({
     content: [{ type: 'text', text }],
-    source: {
-      kind: 'plugin',
-      plugin: 'compact',
-      form: 'notice',
-      summary: `compaction checkpoint ${compactionId}`,
-      compactionId,
-    } as never,
+    source: compactCheckpointSource(compactionId as never),
   })
 }
 
@@ -116,7 +110,7 @@ function fakeParentAgent(): Agent & { injected: UserMessage[] } {
   const injected: UserMessage[] = []
   return {
     session: fakeSession({ id: 'session-parent' }, [{ type: 'user/message' }], [0]),
-    phase: { kind: 'idle' },
+    status: 'idle',
     injected,
     inject(message: UserMessage) { injected.push(message) },
   } as unknown as Agent & { injected: UserMessage[] }
@@ -149,9 +143,8 @@ function fakeHandoffAgent(
   const nextTurn = Array.from({ length: pending.nextTurn ?? 0 })
   return {
     get session() { return session },
-    get phase() { return { kind: phase } },
+    get status() { return phase },
     inbox: {
-      get hasPending() { return nextStep.length > 0 || nextTurn.length > 0 },
       nextStep,
       nextTurn,
     },

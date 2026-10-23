@@ -103,22 +103,20 @@ function firstLine(text: string): string {
 /**
  * The transfer facts when `data` is a branch-event transfer envelope user
  * message (a `/squash` merge checkpoint or a `/rebased into` transcript),
- * else null. Detection is two-keyed: a plugin source this plugin or the
- * official compaction owns (`kind: 'plugin'` with plugin `dsh-session-fork`
- * or `compact`), and the machine-contract preamble parsed by
- * src/branch-events.ts `parseTransferPreamble` — the frozen session-format
- * plugin-source vocabulary admits no structured provenance members, so the
- * self-describing preamble text IS the durable machine record. Every
- * delivered transfer carries it; `message` envelopes and plain notices do
- * not match. That is what separates transfer envelopes from dsh's own
- * `/compact` checkpoints and every other plugin message, which stay
- * filtered.
+ * else null. Detection is two-keyed: a current producer source or a
+ * host-migrated historical form, and the machine-contract preamble parsed
+ * by `parseTransferPreamble`. Plain notices and dsh's own `/compact`
+ * checkpoints do not carry that preamble, so they stay filtered.
  */
 function transferFactsOf(data: unknown): TransferFacts | null {
   if (data === null || typeof data !== 'object') return null
   const source = (data as { source?: { kind?: unknown; plugin?: unknown } }).source
-  if (source === null || typeof source !== 'object' || source.kind !== 'plugin') return null
-  if (source.plugin !== 'dsh-session-fork' && source.plugin !== 'compact') return null
+  if (source === null || typeof source !== 'object') return null
+  const current = source.kind === 'dsh-session-fork' || source.kind === 'compact-checkpoint'
+  const migrated = source.kind === 'plugin:dsh-session-fork'
+  const legacy = source.kind === 'plugin'
+    && (source.plugin === 'dsh-session-fork' || source.plugin === 'compact')
+  if (!current && !migrated && !legacy) return null
   return parseTransferPreamble(userMessageText(data))
 }
 

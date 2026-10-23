@@ -6,6 +6,10 @@ Sub agents and parallel development never quite deliver in today's agent apps. T
 
 This is a plugin for `DeepSeek Harness`; it cannot run standalone.
 
+Version `0.4.0` supports dsh `0.2.1-rc.2`. It replaces the previous dsh `0.1.2-rc.1` compatibility line; upgrade dsh before upgrading this plugin.
+
+For compatibility development, build a sibling `../deepseek-harness` checkout and run `bun run test:harness`. Set `DSH_HARNESS_DIR` to use another checkout. The check uses an isolated copy linked to the actual harness packages and checks V4 messages, historical merges, and both Host and Client types.
+
 ![branch_tab](docs/media/branch_tab.png)
 
 ## Pain points it solves

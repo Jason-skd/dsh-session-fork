@@ -53,15 +53,10 @@ export function parseRebasedIntoAction(rawInput: string): RebasedIntoAction {
 }
 
 /**
- * The agent shape rebased-into needs: the public `Agent` (its `inject` is the
- * transport) plus the runtime phase marker for the SOURCE idle gate — the
- * command contract hands over an idle agent, and the gate keeps the honest
- * wording symmetric with squash. The TARGET is deliberately not gated.
+ * The agent shape rebased-into needs: the public `Agent` includes inject and
+ * status. The TARGET is deliberately not gated.
  */
-export type RebasedIntoAgent = Agent & {
-  readonly phase: { readonly kind: string }
-  readonly inject: (message: Parameters<Agent['inject']>[0]) => void
-}
+export type RebasedIntoAgent = Agent
 
 /** Capabilities one `/rebase` execution needs. */
 export interface RebasedIntoCommandDeps {
@@ -108,7 +103,7 @@ export async function executeRebase(
   // Source idle gate: the command contract promises an idle agent; refuse
   // loudly if that contract is ever violated (a moving source would serialize
   // a region the agent is still appending to).
-  if (deps.sourceAgent.phase.kind !== 'idle') {
+  if (deps.sourceAgent.status !== 'idle') {
     return { kind: 'error', text: 'Rebased-into is unavailable while this branch is not idle.' }
   }
 

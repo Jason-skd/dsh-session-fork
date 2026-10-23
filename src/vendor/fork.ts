@@ -58,7 +58,7 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 // typecheck here (mirroring api/session-controller/agent.ts:504-509).
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 
 /** Header fields the vendored helpers consume. */
 export interface VendoredSourceHeader {

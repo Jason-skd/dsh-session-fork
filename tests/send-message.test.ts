@@ -100,8 +100,8 @@ describe('executeSendMessage', () => {
     // The source stays inside the frozen plugin vocabulary; both endpoints
     // are named by the self-describing preamble (2026-09-05 re-baseline).
     const source = steered[0]!.source as Record<string, unknown>
-    expect(Object.keys(source).sort()).toEqual(['form', 'kind', 'plugin', 'summary'])
-    expect(source.plugin).toBe('dsh-session-fork')
+    expect(Object.keys(source).sort()).toEqual(['form', 'kind', 'summary'])
+    expect(source.kind).toBe('dsh-session-fork')
     expect(source.form).toBe('notice')
   })
 

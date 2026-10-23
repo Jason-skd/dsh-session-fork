@@ -26,10 +26,9 @@ import type {} from '@deepseek-ai/dsh-token-meter'
 // Same presence pattern for the prompt-assembly service the vocabulary
 // section registers into (`ctx.systemPrompt`, issue #28).
 import type {} from '@deepseek-ai/dsh-system-prompt'
-// Presence import for the agentPreset projection: pulls in the
-// SessionProjectionMap augmentation so `observation.projections.values.agentPreset`
-// typechecks here without importing the implementation at runtime.
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-host-webserver'
+// Presence import for the agentPreset projection owned by the registry.
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { ArchiveOutcome, BranchPorts, SourceSessionView } from './branch.js'
 import { BranchArchiveError, BranchForkError } from './branch.js'
 import { executeBranchAction, parseBranchAction, createNamedBranch } from './command.js'
@@ -169,6 +168,7 @@ export const inject = [
   'llm',
   'sessionController',
   'connection',
+  'webServer',
   'tools',
   'systemPrompt'
 ]
@@ -253,7 +253,7 @@ function makeArchiveSession(ctx: Context): (sessionId: string) => Promise<Archiv
       await controller.archiveSession({ sessionId: sessionId as Session['id'] })
     } catch (error) {
       const failure = (error as { failure?: { code?: string; message?: string } }).failure
-      if (failure?.code === 'session-not-found') return 'missing'
+      if (failure?.code === 'session/not-found') return 'missing'
       throw new BranchArchiveError(
         `session archive rejected: ${failure?.code ?? 'unknown'}: ${failure?.message ?? String(error)}`,
       )
@@ -412,12 +412,7 @@ function makePorts(ctx: Context): BranchPorts {
 /** Whether a session exists live or on disk. */
 async function sessionExists(ctx: Context, sessionId: string): Promise<boolean> {
   if (ctx.sessions.get(sessionId as Session['id']) !== undefined) return true
-  try {
-    await ctx.sessionPersistence.inspect(sessionId as Session['id'])
-    return true
-  } catch {
-    return false
-  }
+  return await ctx.sessionPersistence.stat(sessionId as Session['id']) !== undefined
 }
 
 /**
@@ -430,12 +425,8 @@ async function sessionExists(ctx: Context, sessionId: string): Promise<boolean> 
 async function resolveWorkspaceKey(ctx: Context, sessionId: string): Promise<string | null> {
   const live = ctx.sessions.get(sessionId as Session['id'])
   if (live !== undefined) return live.header.cwd ?? ''
-  try {
-    const inspected = await ctx.sessionPersistence.inspect(sessionId as Session['id'])
-    return inspected.meta.cwd ?? ''
-  } catch {
-    return null
-  }
+  const stored = await ctx.sessionPersistence.stat(sessionId as Session['id'])
+  return stored === undefined ? null : stored.header.cwd ?? ''
 }
 
 /**
@@ -516,9 +507,9 @@ export async function apply(ctx: Context): Promise<void> {
     void operation.then(retire, retire)
   }
 
-  // Structural read of the host connection registry (the web-app bundle
-  // provides the connection service). When absent — a non-web host — the
-  // /branch command family still works and only the RPC channel is skipped.
+  // Structural read of the authenticated Connection service. When absent —
+  // a non-web host — the command family still works and only the RPC route
+  // is skipped.
   const connection = ctx.get('connection') as ConnectionRpcLike | undefined
 
   ctx.effect(function* () {
@@ -707,7 +698,7 @@ export async function apply(ctx: Context): Promise<void> {
           trackDetached,
         },
       }
-      yield registerRpcChannel(connection, createBranchRpcHandler(rpcPorts))
+      yield registerRpcChannel(connection, ctx.webServer, createBranchRpcHandler(rpcPorts))
     }
 
     // Track one detached mid-turn handoff continuation: see trackDetached

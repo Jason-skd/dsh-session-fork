@@ -28,6 +28,10 @@ beforeAll(() => {
   globals.window = window
   globals.document = window.document
   globals.navigator = window.navigator
+  globals.HTMLElement = window.HTMLElement
+  globals.Node = window.Node
+  globals.requestAnimationFrame = window.requestAnimationFrame.bind(window)
+  globals.cancelAnimationFrame = window.cancelAnimationFrame.bind(window)
   globals.IS_REACT_ACT_ENVIRONMENT = true
 })
 
@@ -36,6 +40,10 @@ afterAll(() => {
   globals.IS_REACT_ACT_ENVIRONMENT = false
   globals.document = undefined
   globals.window = undefined
+  globals.HTMLElement = undefined
+  globals.Node = undefined
+  globals.requestAnimationFrame = undefined
+  globals.cancelAnimationFrame = undefined
   window.close()
 })
 const t = (key: string): string => `#${key}`
@@ -58,24 +66,19 @@ function mountDialog(controller: ReturnType<typeof createBranchNameDialog>): Mou
 
 /** Fake sessions service recording calls, receiver identity, addressability. */
 function fakeSessions(options: { addressableFrom?: string[] } = {}): SessionsServiceLike & {
-  readonly opened: string[]
   readonly calls: { thisArg: unknown; opts: unknown[] }[]
 } {
-  const opened: string[] = []
   const calls: { thisArg: unknown; opts: unknown[] }[] = []
   const service: SessionsServiceLike = {
     fork(...opts: [{ sessionId: string }]): Promise<string> {
       calls.push({ thisArg: this, opts })
       return Promise.resolve(`child-of-${opts[0]!.sessionId}`)
     },
-    open(sessionId) {
-      opened.push(sessionId)
-    },
     binding(sessionId) {
       return options.addressableFrom?.includes(sessionId) ? { session: sessionId } : undefined
     },
   }
-  return Object.assign(service, { opened, calls })
+  return Object.assign(service, { calls })
 }
 
 /** Deps harness: scripted dialog + recording wire/gate. */
@@ -84,10 +87,12 @@ function depsHarness(overrides: Partial<ForkInterceptDeps> = {}): {
   forkCalls: ForkEndpointPayload[]
   nextResults: ForkEndpointResult[]
   waitFor: string[]
+  opened: string[]
 } {
   const forkCalls: ForkEndpointPayload[] = []
   const nextResults: ForkEndpointResult[] = [{ ok: true, value: { sessionId: 'child-1' } }]
   const waitFor: string[] = []
+  const opened: string[] = []
   const sessions = fakeSessions({ addressableFrom: ['child-1'] })
   const deps: ForkInterceptDeps = {
     sessions,
@@ -102,9 +107,12 @@ function depsHarness(overrides: Partial<ForkInterceptDeps> = {}): {
     waitForSession: async (sessionId) => {
       waitFor.push(sessionId)
     },
+    openSession: (sessionId) => {
+      opened.push(sessionId)
+    },
     ...overrides,
   }
-  return { deps, forkCalls, nextResults, waitFor }
+  return { deps, forkCalls, nextResults, waitFor, opened }
 }
 
 describe('fork-name dialog controller', () => {
@@ -208,13 +216,19 @@ describe('fork-name dialog controller', () => {
 
 describe('intercepted fork flow', () => {
   test('success: gate passes, wire called once, child awaited then opened, childId returned', async () => {
-    const { deps, forkCalls, waitFor } = depsHarness()
+    const { deps, forkCalls, waitFor, opened } = depsHarness()
     installForkIntercept(deps)
-    const result = await deps.sessions.fork({ sessionId: 's1', increaseTitle: true })
+    const created: string[] = []
+    const result = await deps.sessions.fork({
+      sessionId: 's1',
+      increaseTitle: true,
+      onCreated: sessionId => { created.push(sessionId) },
+    })
     expect(result).toBe('child-1')
     expect(forkCalls).toEqual([{ sessionId: 's1', name: 'review' }]) // increaseTitle dropped
     expect(waitFor).toEqual(['child-1'])
-    expect((deps.sessions as { opened: string[] }).opened).toEqual(['child-1'])
+    expect(created).toEqual(['child-1'])
+    expect(opened).toEqual(['child-1'])
   })
 
   test('fractional atSeq floors to an integer on the wire', async () => {
@@ -225,13 +239,13 @@ describe('intercepted fork flow', () => {
   })
 
   test('cancel rejects with the cancel error and never touches the wire', async () => {
-    const { deps, forkCalls } = depsHarness({
+    const { deps, forkCalls, opened } = depsHarness({
       requestName: () => Promise.resolve(undefined),
     })
     installForkIntercept(deps)
     await expect(deps.sessions.fork({ sessionId: 's1' })).rejects.toThrow('fork cancelled')
     expect(forkCalls).toEqual([])
-    expect((deps.sessions as { opened: string[] }).opened).toEqual([])
+    expect(opened).toEqual([])
   })
 
   test('client pre-gate failure surfaces through the dialog bridge without wire traffic', async () => {

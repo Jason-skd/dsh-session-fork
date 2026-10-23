@@ -62,11 +62,10 @@ export const SQUASH_HANDOFF_CAUSE: AgentCancelCause = {
  * fakes carrying exactly these members.
  */
 export interface SquashHandoffAgent {
-  /** Runtime phase marker (the executor's idle gate carries the same). */
-  readonly phase: { readonly kind: string }
+  /** Public lifecycle state used by the executor's idle gate. */
+  readonly status: 'idle' | 'running'
   /** Inbox state, for the unread-mail guard. */
   readonly inbox: {
-    readonly hasPending: boolean
     readonly nextStep: readonly unknown[]
     readonly nextTurn: readonly unknown[]
   }
@@ -116,8 +115,7 @@ function initiatedText(target: string): string {
 
 /** The notice-source shape of the follow-up report (mirrors branch-events). */
 interface HandoffNoticeSource {
-  readonly kind: 'plugin'
-  readonly plugin: 'dsh-session-fork'
+  readonly kind: 'dsh-session-fork'
   readonly form: 'notice'
   readonly summary: string
 }
@@ -136,13 +134,12 @@ export function handoffReport(target: string, result: BranchCommandResult): User
   return createUserMessage({
     content: [{ type: 'text', text: body }],
     source: {
-      kind: 'plugin',
-      plugin: 'dsh-session-fork',
+      kind: 'dsh-session-fork',
       form: 'notice',
       summary: boundContextSummary(
         `squash handoff ${result.kind === 'success' ? 'completed' : 'failed'}: ${target}`,
       ),
-    } as HandoffNoticeSource & Record<string, unknown>,
+    } satisfies HandoffNoticeSource,
   })
 }
 
@@ -194,10 +191,10 @@ export async function dispatchSquash(
   deps: SquashHandoffDeps,
   run: DetachedRunner,
 ): Promise<BranchCommandResult> {
-  if (deps.childAgent.phase.kind === 'idle') {
+  if (deps.childAgent.status === 'idle') {
     return executeSquash(target, deps)
   }
-  if (deps.childAgent.inbox.hasPending) {
+  if (deps.childAgent.inbox.nextStep.length + deps.childAgent.inbox.nextTurn.length > 0) {
     const { nextStep, nextTurn } = deps.childAgent.inbox
     return { kind: 'error', text: inboxPendingText(target, nextStep.length, nextTurn.length) }
   }

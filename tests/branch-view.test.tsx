@@ -38,6 +38,10 @@ beforeAll(() => {
   globals.window = window
   globals.document = window.document
   globals.navigator = window.navigator
+  globals.HTMLElement = window.HTMLElement
+  globals.Node = window.Node
+  globals.requestAnimationFrame = window.requestAnimationFrame.bind(window)
+  globals.cancelAnimationFrame = window.cancelAnimationFrame.bind(window)
   globals.IS_REACT_ACT_ENVIRONMENT = true
 })
 
@@ -46,6 +50,10 @@ afterAll(() => {
   globals.IS_REACT_ACT_ENVIRONMENT = false
   globals.document = undefined
   globals.window = undefined
+  globals.HTMLElement = undefined
+  globals.Node = undefined
+  globals.requestAnimationFrame = undefined
+  globals.cancelAnimationFrame = undefined
   window.close()
 })
 
@@ -148,7 +156,7 @@ describe('BranchGraphView states', () => {
     const badges = [...mounted.container.querySelectorAll('span')]
       .filter(span => (span as HTMLElement).style.backgroundColor.includes('--dsh-fork-graph'))
     expect(badges).toHaveLength(1)
-    // The badge carries the branch icon (official IconBranchOutline16).
+    // The badge carries the current official branch outline icon.
     expect(badges[0]?.querySelector('svg')).not.toBeNull()
     // The label spans render as the official Tooltip primitive's anchors
     // (issue #8): no data-full CSS-tooltip residue anywhere.

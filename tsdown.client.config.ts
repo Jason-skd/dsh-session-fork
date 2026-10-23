@@ -47,13 +47,14 @@ import { transform } from 'lightningcss'
  */
 const PLATFORM_MODULES = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis',
+  'zod', '@tanstack/react-virtual',
+  '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-ui-dockkit',
 ] as const
 
-const PRELOADED_CLIENT_EXTERNALS = [
-  '@deepseek-ai/dsh-client-runtime/client',
-] as const
+const PRELOADED_CLIENT_EXTERNALS = [] as const
 
 /** The plugin id stamped into the loader handoff and the injected style tags. */
 const PLUGIN_ID = 'dsh-session-fork'

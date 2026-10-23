@@ -41,7 +41,7 @@ function fakeSession(header: Partial<SessionHeader>, rawEvents: readonly FakeEve
 function fakeAgent(session: Session, phaseKind: string, injected: UserMessage[]): RebasedIntoAgent {
   return {
     session,
-    phase: { kind: phaseKind },
+    status: phaseKind,
     inject: (message: UserMessage) => { injected.push(message) },
   } as unknown as RebasedIntoAgent
 }

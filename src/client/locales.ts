@@ -26,6 +26,7 @@ export type ForkLocaleKey =
   | 'remove.description'
   | 'remove.acknowledge'
   | 'remove.cancel'
+  | 'remove.close'
   | 'remove.confirm'
   | 'remove.failed'
   | 'squash.title'
@@ -65,6 +66,7 @@ export const zh: Record<ForkLocaleKey, string> = {
   'remove.description': '将归档该分支的会话并删除分支引用;会话数据保留,但侧边栏不再显示该会话。此操作不可撤销。',
   'remove.acknowledge': '我了解此操作会归档会话、删除分支引用且不可撤销',
   'remove.cancel': '取消',
+  'remove.close': '关闭',
   'remove.confirm': '删除分支',
   'remove.failed': '删除分支失败:',
   'squash.title': 'Squash 到分支',
@@ -98,6 +100,7 @@ export const en: Record<ForkLocaleKey, string> = {
   'remove.description': 'Archives the branch\'s session and removes the branch ref; the session data is kept but the session disappears from the sidebar. This cannot be undone.',
   'remove.acknowledge': 'I understand this archives the session, removes the branch ref, and cannot be undone',
   'remove.cancel': 'Cancel',
+  'remove.close': 'Close',
   'remove.confirm': 'Remove branch',
   'remove.failed': 'Failed to remove branch: ',
   'squash.title': 'Squash into branch',

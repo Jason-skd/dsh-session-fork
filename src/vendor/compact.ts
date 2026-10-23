@@ -323,7 +323,7 @@ export async function summarizeWithLlm(
       // Upstream marks this auxiliary message with the compaction-basic
       // plugin id; kept verbatim — the instruction message is a side call
       // that never lands in any persisted log.
-      source: { kind: 'plugin', plugin: 'dsh-compaction-basic' },
+      source: { kind: 'compact-basic' },
     }),
   ]
   const options: GenerateOptions = {
@@ -848,7 +848,7 @@ function commitCompactionBody(
     ...usage === undefined ? {} : { usage },
   })
   session.append('user/message', checkpointMessage, {
-    surfaceOp: { op: 'replace', start, end },
+    surfaceOp: { op: 'replace', startSeq: start, endSeq: end },
     sourceEventSeqs: [startEvent.seq, summaryEvent.seq, ...shadowedSeqs],
   })
   return {

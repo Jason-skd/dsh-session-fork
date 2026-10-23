@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
+import { Readable } from 'node:stream'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
@@ -20,6 +21,7 @@ import {
   type ConnectionRpcLike,
   type RpcHandler,
   type SquashPorts,
+  type WebServerLike,
 } from '../src/rpc.ts'
 import { BranchArchiveError } from '../src/branch.ts'
 import type { ArchiveOutcome } from '../src/branch.ts'
@@ -27,32 +29,33 @@ import type { RegistryState, RegistryStore } from '../src/types.ts'
 
 interface HandleCall {
   readonly channel: string
-  readonly handler: RpcHandler
-  readonly options: { readonly authority: string }
+  readonly handler: (request: never, response: never) => Promise<void>
 }
 
 /**
  * Fake of the host connection handle. Mirrors the real nesting:
- * `HostConnectionHandle` = `{ rpc: HostConnectionRpc }` — `handle` lives on
+ * `HostConnectionHandle` = `{ rpc: HostConnectionRpc }` — `intercept` lives on
  * the `rpc` sub-object, never on the top level (a flat fake would bake a
  * wrong service shape into the tests and hide the production mismatch).
  */
-function fakeConnection(): {
+function fakeConnection(principal = 'owner'): {
   connection: ConnectionRpcLike
+  webServer: WebServerLike
   calls: HandleCall[]
   disposer: () => Promise<void>
 } {
   const calls: HandleCall[] = []
   const disposer = async (): Promise<void> => {}
   const connection: ConnectionRpcLike = {
-    rpc: {
-      handle(channel, handler, options) {
-        calls.push({ channel, handler, options: { ...options } })
-        return disposer
-      },
+    admit: () => ({ peer: { principal: { kind: principal } } }),
+  }
+  const webServer: WebServerLike = {
+    register(route) {
+      calls.push({ channel: route.path, handler: route.handler as HandleCall['handler'] })
+      return disposer
     },
   }
-  return { connection, calls, disposer }
+  return { connection, webServer, calls, disposer }
 }
 
 /** In-memory ports: sessionId → workspaceKey resolution plus per-workspace registries. */
@@ -137,21 +140,52 @@ const WORKSPACE: RegistryState = {
 }
 
 describe('registerRpcChannel', () => {
-  test('registers the channel with loopback authority and returns the handle disposer', () => {
-    const { connection, calls, disposer } = fakeConnection()
+  test('registers one channel and returns the handle disposer', () => {
+    const { connection, webServer, calls, disposer } = fakeConnection()
     const handler: RpcHandler = async () => ({ ok: true, value: null })
-    expect(registerRpcChannel(connection, handler)).toBe(disposer)
+    expect(registerRpcChannel(connection, webServer, handler)).toBe(disposer)
     expect(calls).toHaveLength(1)
-    expect(calls[0]).toEqual({
-      channel: RPC_CHANNEL,
-      handler,
-      options: { authority: 'loopback' },
-    })
+    expect(calls[0]?.channel).toBe(RPC_CHANNEL)
   })
 
-  test('the channel name satisfies the host channel grammar and is not the reserved /api', () => {
+  test('admits owner peers and rejects other principals', async () => {
+    const { connection, webServer, calls } = fakeConnection()
+    registerRpcChannel(connection, webServer, async () => ({ ok: true, value: 'owner' }))
+    const handler = calls[0]!.handler
+    const request = Object.assign(Readable.from([JSON.stringify({
+      type: 'client-request',
+      rpcId: 'rpc-1',
+      method: 'graph',
+      payload: {},
+    })]), {
+      method: 'POST',
+      url: `${RPC_CHANNEL}/graph`,
+      headers: { 'content-type': 'application/json' },
+    })
+    const response = {
+      status: 0,
+      body: '',
+      writeHead(status: number) { this.status = status },
+      end(body: string) { this.body = body },
+    }
+    await handler(request as never, response as never)
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({
+      type: 'server-response',
+      rpcId: 'rpc-1',
+      result: { ok: true, value: 'owner' },
+    })
+
+    const other = fakeConnection('other')
+    registerRpcChannel(other.connection, other.webServer, async () => ({ ok: true, value: 'forbidden' }))
+    const denied = { status: 0, body: '', writeHead(status: number) { this.status = status }, end(body: string) { this.body = body } }
+    await other.calls[0]!.handler(request as never, denied as never)
+    expect(denied).toMatchObject({ status: 403, body: 'forbidden' })
+  })
+
+  test('uses the plugin-owned authenticated route', () => {
     expect(RPC_CHANNEL).toMatch(/^\/[A-Za-z0-9._~-]+$/)
-    expect(RPC_CHANNEL).not.toBe('/api')
+    expect(RPC_CHANNEL).toBe('/dsh-session-fork')
   })
 })
 
@@ -528,12 +562,12 @@ function checkpointUserMessage(compactionId: string, text: string): UserMessage 
   })
 }
 
-/** Minimal fake agent around a session, a phase kind, and an inject spy. */
+/** Minimal fake agent around a session, a status, and an inject spy. */
 function fakeAgent(session: Session, phaseKind: string): Agent & { injected: unknown[] } {
   const injected: unknown[] = []
   return {
     session,
-    phase: { kind: phaseKind },
+    status: phaseKind,
     injected,
     inject(message: never) { injected.push(message) },
   } as unknown as Agent & { injected: unknown[] }

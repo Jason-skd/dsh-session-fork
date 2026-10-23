@@ -1,5 +1,9 @@
 # dsh-session-fork
 
+`0.4.0` 支持 dsh `0.2.1-rc.2`，替代原先的 dsh `0.1.2-rc.1` 兼容线；请先升级 dsh，再升级本插件。
+
+兼容性开发：先构建旁边的 `../deepseek-harness`，再运行 `bun run test:harness`；可通过 `DSH_HARNESS_DIR` 指定其他目录。检查使用隔离副本连接真实宿主包，覆盖 V4 消息、历史合并记录及 Host、Client 两面的类型。
+
 [English](../README.md) | 简体中文
 
 Sub agent 与 并行开发在当前 agent 应用上表现总是不尽人意。本项目以 git 的 branch 式管理 dsh 原生的离散的 会话，通过提供 `fork` 会话继承和 `squash`、 `rebased` 会话合并，极大提升了在 dsh 上并行开发和提示词管理的体验。

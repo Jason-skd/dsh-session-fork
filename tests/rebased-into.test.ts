@@ -64,10 +64,9 @@ describe('serializeTranscript', () => {
           data: {
             message: {
               id: 'm2',
-              role: 'user',
-              content: [
-                { type: 'tool-result', toolCallId: 'call-1', content: [{ type: 'text', text: 'file-a file-b' }] },
-              ],
+              role: 'tool',
+              toolCallId: 'call-1',
+              content: [{ type: 'text', text: 'file-a file-b' }],
               source: { kind: 'tool', callId: 'call-1' },
             },
           },
@@ -96,10 +95,10 @@ describe('serializeTranscript', () => {
           data: {
             message: {
               id: 'm1',
-              role: 'user',
-              content: [
-                { type: 'tool-result', toolCallId: 'c', isError: true, content: [{ type: 'text', text: 'boom' }] },
-              ],
+              role: 'tool',
+              toolCallId: 'c',
+              isError: true,
+              content: [{ type: 'text', text: 'boom' }],
               source: { kind: 'tool', callId: 'c' },
             },
           },

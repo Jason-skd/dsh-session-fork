@@ -101,11 +101,11 @@ function fakeSession(header: Partial<SessionHeader>, rawEvents: unknown[], surfa
       const seq = events.length
       const event = { type, seq, time: 0, data, ...opts } as unknown as SessionEvent
       events.push(event)
-      const op = opts?.surfaceOp as { op?: string; start?: number; end?: number } | string | undefined
+      const op = opts?.surfaceOp as { op?: string; startSeq?: number; endSeq?: number } | string | undefined
       if (op === 'append') surface.nodes.push(seq)
       else if (typeof op === 'object' && op?.op === 'replace') {
-        const startIdx = surface.nodes.indexOf(op.start ?? -1)
-        const endIdx = surface.nodes.indexOf(op.end ?? -1)
+        const startIdx = surface.nodes.indexOf(op.startSeq ?? -1)
+        const endIdx = surface.nodes.indexOf(op.endSeq ?? -1)
         surface.nodes.splice(startIdx, endIdx - startIdx + 1, seq)
         surface.replaceGeneration += 1
       }
@@ -122,21 +122,20 @@ function fakeAgent(session: Session): Agent & { injected: UserMessage[] } {
     session,
     id: (session as unknown as { id: string }).id,
     options: {},
-    phase: { kind: 'idle' },
+    status: 'idle',
     injected,
     inject(message: UserMessage) {
       injected.push(message)
     },
     runMaintenance(job: (signal: AbortSignal) => Promise<unknown>) {
-      const phase = agent.phase as { kind: string }
-      if (phase.kind !== 'idle') throw new Error(`agent already has active work`)
+      if (agent.status !== 'idle') throw new Error(`agent already has active work`)
       const controller = new AbortController()
-      agent.phase = { kind: 'maintenance', abort: controller }
+      agent.status = 'running'
       return (async () => {
         try {
           return await job(controller.signal)
         } finally {
-          agent.phase = { kind: 'idle' }
+          agent.status = 'idle'
         }
       })()
     },
@@ -198,11 +197,11 @@ function childFixture(): Session {
 function replaySurface(session: Session): number[] {
   const nodes: number[] = []
   for (const event of session.snapshotEvents()) {
-    const raw = event as unknown as { surfaceOp?: { op?: string; start?: number; end?: number } | string }
+    const raw = event as unknown as { surfaceOp?: { op?: string; startSeq?: number; endSeq?: number } | string }
     if (raw.surfaceOp === 'append') nodes.push(event.seq)
     else if (typeof raw.surfaceOp === 'object' && raw.surfaceOp?.op === 'replace') {
-      const startIdx = nodes.indexOf(raw.surfaceOp.start ?? -1)
-      const endIdx = nodes.indexOf(raw.surfaceOp.end ?? -1)
+      const startIdx = nodes.indexOf(raw.surfaceOp.startSeq ?? -1)
+      const endIdx = nodes.indexOf(raw.surfaceOp.endSeq ?? -1)
       nodes.splice(startIdx, endIdx - startIdx + 1, event.seq)
     }
   }

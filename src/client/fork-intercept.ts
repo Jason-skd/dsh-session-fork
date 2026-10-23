@@ -32,12 +32,15 @@ export interface ForkOptions {
   sessionId: string
   atSeq?: number
   increaseTitle?: boolean
+  /** Official creation observer used for navigation analytics. */
+  onCreated?: (sessionId: string) => void
+  /** Accepted by the official path; the named-fork pipeline owns migration. */
+  allowMigration?: boolean
 }
 
 /** Structural slice of the shared client sessions service we patch. */
 export interface SessionsServiceLike {
   fork(opts: ForkOptions): Promise<string>
-  open(sessionId: string): void
   /** Local addressability probe used to await the host-broadcast child. */
   binding(sessionId: string): unknown
 }
@@ -70,6 +73,8 @@ export interface ForkInterceptDeps {
   readonly callFork: (payload: ForkEndpointPayload) => Promise<ForkEndpointResult>
   /** Wait until the created child is locally addressable (broadcast race). */
   readonly waitForSession: (sessionId: string) => Promise<void>
+  /** Select the created child in the Workspace navigation owner. */
+  readonly openSession: (sessionId: string) => void
 }
 
 /** The dialog request face the interception consumes. */
@@ -145,6 +150,7 @@ async function interceptedFork(
   } catch {
     // Addressability wait failed (e.g. timer exhaustion) — open anyway.
   }
-  sessions.open(accepted.sessionId)
+  opts.onCreated?.(accepted.sessionId)
+  deps.openSession(accepted.sessionId)
   return accepted.sessionId
 }

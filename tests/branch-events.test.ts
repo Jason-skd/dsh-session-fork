@@ -60,8 +60,7 @@ describe('buildBranchNotice', () => {
     )
     expect(message.role).toBe('user')
     expect(message.source).toEqual({
-      kind: 'plugin',
-      plugin: 'dsh-session-fork',
+      kind: 'dsh-session-fork',
       form: 'notice',
       summary: 'fork: main → review',
     })
@@ -88,8 +87,7 @@ describe('buildBranchNotice', () => {
       + 'rebased into you) as applying to this session.',
     )
     expect(message.source).toEqual({
-      kind: 'plugin',
-      plugin: 'dsh-session-fork',
+      kind: 'dsh-session-fork',
       form: 'notice',
       summary: 'adopt: sess-abc → main',
     })
@@ -103,8 +101,7 @@ describe('buildBranchNotice', () => {
       + 'Earlier notices may still say "main" — they were true when written.',
     )
     expect(message.source).toEqual({
-      kind: 'plugin',
-      plugin: 'dsh-session-fork',
+      kind: 'dsh-session-fork',
       form: 'notice',
       summary: 'rename: main → develop',
     })
@@ -174,14 +171,14 @@ describe('source shapes (frozen plugin vocabulary)', () => {
     // builders must never emit one. See format-watch.test.ts for the rule's
     // provenance.
     expect(Object.keys(buildBranchNotice(forkFacts, 'line').source).sort())
-      .toEqual(['form', 'kind', 'plugin', 'summary'])
+      .toEqual(['form', 'kind', 'summary'])
     expect(Object.keys(buildBranchEnvelope(squashFacts, 'payload').source).sort())
-      .toEqual(['form', 'kind', 'plugin', 'summary'])
+      .toEqual(['form', 'kind', 'summary'])
     // The frozen vocabulary admits a summary only on the notice form, so
     // the recall-form rebased-into envelope carries none.
     const rebasedInto: BranchEventFacts = { kind: 'rebased-into', from: 'exp', to: 'main' }
     expect(Object.keys(buildBranchEnvelope(rebasedInto, 'payload').source).sort())
-      .toEqual(['form', 'kind', 'plugin'])
+      .toEqual(['form', 'kind'])
   })
 })
 

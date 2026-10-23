@@ -2,19 +2,15 @@
  * Host-side custom RPC channel for the branch-graph GUI tab.
  * @module dsh-session-fork/src/rpc
  *
- * dsh exposes a generic unary RPC transport per logical channel
- * (`HostConnectionRpc.handle(channel, handler, options)` in
- * packages/client/connection/src/rpc.ts of the harness checkout, wired
- * through the HTTP route in packages/client/connection/src/rpc-host.ts).
- * This plugin owns one channel, `/dsh-session-fork`, and serves a single
- * `registry` endpoint: the branch-registry snapshot of the workspace a
- * given session belongs to.
+ * dsh authenticates requests through its Connection service, but reserves
+ * the only `/api` interceptor for the core API. This plugin owns one Web
+ * route, `/dsh-session-fork`, and reuses Connection admission before
+ * decoding the same unary RPC envelope.
  *
  * The channel name complies with the host's CHANNEL_PATTERN
  * (`/^\/[A-Za-z0-9._~-]+$/`, rpc-host.ts) and is not the reserved `/api`.
- * Trust is `loopback`: only the browser served by this very host may call
- * the endpoint — the GUI tab is rendered by the same web app, and a plugin
- * channel should never be reachable from other origins.
+ * Only owner principals may call the decoded endpoints. Browser requests
+ * still pass through Connection's configured authority fence.
  *
  * Every dsh touchpoint here is a *structural* declaration (no host package
  * import), mirroring the pattern already used for `ctx.get('workspaceRegistry')`
@@ -22,11 +18,11 @@
  * shape-compatible with the host's
  * `RpcResult<T>` (packages/host/apiproxy/src/api/rpc.ts:110) and
  * `ConnectionRpcHandler` (packages/client/connection/src/rpc.ts), so the
- * handler stays unit-testable without cordis and the plugin keeps its
- * no-host-imports dependency policy.
+ * handler stays unit-testable without cordis.
  */
 
 import { z } from 'zod'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import { branchErrorMessage } from './command.js'
@@ -38,9 +34,9 @@ import { dispatchSquash } from './squash-midturn.js'
 import type { SquashChildAgent } from './squash-command.js'
 import type { ForkOrigin, RegistryState, RegistryStore, SessionExists } from './types.js'
 import type { CompactRegionRequest } from './vendor/compact.js'
+import { RPC_CHANNEL } from './rpc-contract.js'
 
-/** Channel path this plugin owns on the host connection registry. */
-export const RPC_CHANNEL = '/dsh-session-fork'
+export { RPC_CHANNEL } from './rpc-contract.js'
 
 /**
  * Error branch of {@link RpcResult} as emitted by this plugin.
@@ -69,43 +65,149 @@ export type RpcHandler = (
   endpoint: string,
   payload: unknown,
   signal: AbortSignal,
+  peer?: { readonly principal: { readonly kind: string } },
 ) => Promise<RpcResult<unknown>>
 
-/** Structural slice of the host's `ConnectionRpcHandlerOptions`. */
-export interface RpcChannelOptions {
-  readonly authority: 'trusted-host' | 'loopback'
-}
-
-/**
- * Structural slice of the host's `HostConnectionHandle`: the handle nests the
- * channel registry under `rpc` (`HostConnectionService` implements
- * `HostConnectionHandle` = `{ rpc: HostConnectionRpc }`, rpc-host.ts), so the
- * slice must too — a flat slice compiles but finds `handle` undefined on the
- * real service.
- */
+/** Authenticated peer admission exposed by the Connection service. */
 export interface ConnectionRpcLike {
-  readonly rpc: {
-    handle(
-      channel: string,
-      handler: RpcHandler,
-      options: RpcChannelOptions,
-    ): () => Promise<void>
-  }
+  admit(request: Pick<IncomingMessage, 'headers'>): RpcPeerAdmission
 }
 
+/** Minimal authenticated Web route registry. */
+export interface WebServerLike {
+  register(route: {
+    readonly kind: 'prefix'
+    readonly path: string
+    readonly handler: (request: IncomingMessage, response: ServerResponse) => Promise<void>
+  }): () => unknown
+}
+
+type RpcPeerAdmission =
+  | { readonly peer: { readonly principal: { readonly kind: string } } }
+  | { readonly rejection: 401 | 403 }
+
 /**
- * Register this plugin's channel through the host connection registry.
+ * Register this plugin's authenticated HTTP route.
  *
- * Pure with respect to dsh: takes a structural handle, hardcodes the channel
- * name and loopback trust, and returns the disposer produced by `handle`
- * (removing the channel and its physical route) for the caller's effect
- * layer to yield.
+ * The current Connection service shares one interceptor on `/api`, so a
+ * plugin-owned custom channel cannot use it without replacing the core API
+ * dispatcher. This adapter carries the same Connection request envelope over
+ * its own trusted route and reuses Connection's Host/Origin and session
+ * authentication through `admit()`.
  */
 export function registerRpcChannel(
   connection: ConnectionRpcLike,
+  webServer: WebServerLike,
   handler: RpcHandler,
-): () => Promise<void> {
-  return connection.rpc.handle(RPC_CHANNEL, handler, { authority: 'loopback' })
+): () => unknown {
+  return webServer.register({
+    kind: 'prefix',
+    path: RPC_CHANNEL,
+    async handler(request, response) {
+      const admission = connection.admit(request)
+      if ('rejection' in admission) {
+        response.writeHead(admission.rejection, { 'content-type': 'text/plain; charset=utf-8' })
+        response.end(admission.rejection === 401 ? 'unauthorized' : 'forbidden')
+        return
+      }
+      if (admission.peer.principal.kind !== 'owner') {
+        response.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+        response.end('forbidden')
+        return
+      }
+      let envelope: z.infer<typeof rpcRequestSchema> | undefined
+      try {
+        envelope = await readRpcRequest(request, response)
+      } catch {
+        if (!request.aborted && !response.headersSent) {
+          response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+          response.end('request body read failed')
+        }
+        return
+      }
+      if (envelope === undefined) return
+      const controller = new AbortController()
+      request.once('aborted', () => { controller.abort() })
+      let result: RpcResult<unknown>
+      try {
+        result = await handler(envelope.method, envelope.payload, controller.signal, admission.peer)
+      } catch (error) {
+        result = {
+          ok: false,
+          error: {
+            code: 'internal',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
+          },
+        }
+      }
+      response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+      response.end(JSON.stringify({
+        type: 'server-response',
+        rpcId: envelope.rpcId,
+        result,
+      }))
+    },
+  })
+}
+
+const rpcRequestSchema = z.object({
+  type: z.literal('client-request'),
+  rpcId: z.string(),
+  method: z.string(),
+  payload: z.unknown(),
+})
+
+const MAX_RPC_BODY_BYTES = 1024 * 1024
+
+async function readRpcRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<z.infer<typeof rpcRequestSchema> | undefined> {
+  if (request.method !== 'POST') {
+    response.writeHead(405, { allow: 'POST', 'content-type': 'text/plain; charset=utf-8' })
+    response.end('method not allowed')
+    return undefined
+  }
+  const mediaType = request.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase()
+  if (mediaType !== 'application/json') {
+    response.writeHead(415, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('content type must be application/json')
+    return undefined
+  }
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += bytes.length
+    if (size > MAX_RPC_BODY_BYTES) {
+      response.writeHead(413, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end('request body too large')
+      return undefined
+    }
+    chunks.push(bytes)
+  }
+  let body: unknown
+  try {
+    body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch {
+    response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('body is not JSON')
+    return undefined
+  }
+  const parsed = rpcRequestSchema.safeParse(body)
+  if (!parsed.success) {
+    response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('invalid client-request envelope')
+    return undefined
+  }
+  const endpoint = new URL(request.url ?? '/', 'http://localhost').pathname.slice(RPC_CHANNEL.length + 1)
+  if (endpoint !== parsed.data.method || !/^[A-Za-z0-9._~-]+$/.test(endpoint)) {
+    response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('method does not match endpoint')
+    return undefined
+  }
+  return parsed.data
 }
 
 /** One branch as served by the `registry` endpoint: record fields + liveness flag. */

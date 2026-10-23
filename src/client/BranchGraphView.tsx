@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconBranchOutline16, Menu, RiskConfirmation, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular, Menu, RiskConfirmation, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { validateBranchName } from '../branch-name.js'
 import type { BranchNameDialogController } from './branch-name-dialog.tsx'
@@ -158,7 +158,7 @@ function GraphRow({
                 style={{ backgroundColor: badgeColor }}
                 title={ref.name}
               >
-                <span className={css.refIcon}><IconBranchOutline16 size={12} /></span>
+                <span className={css.refIcon}><IconBranchOutlineRegular size={12} /></span>
                 <span className={css.refName}>{ref.name}</span>
               </span>
             ))}
@@ -473,6 +473,7 @@ export function BranchGraphView({
         description={t('remove.description')}
         acknowledgeLabel={t('remove.acknowledge')}
         cancelLabel={t('remove.cancel')}
+        closeLabel={t('remove.close')}
         confirmLabel={t('remove.confirm')}
         acknowledged={removeAcknowledged}
         onAcknowledgedChange={setRemoveAcknowledged}

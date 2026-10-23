@@ -46,10 +46,6 @@ function renderBlock(block: ContentBlock): string {
       return `(thinking) ${block.text}`
     case 'tool-call':
       return `tool call ${block.name}(${block.arguments})`
-    case 'tool-result': {
-      const inner = block.content.map(renderBlock).join('\n')
-      return `tool result${block.isError === true ? ' (error)' : ''} for call ${block.toolCallId}:\n${inner}`
-    }
     default:
       // Merge-extensible union: an unknown plugin block is opaque content —
       // state that honestly rather than dropping it silently.
@@ -60,6 +56,9 @@ function renderBlock(block: ContentBlock): string {
 /** Render one derived message with its role prefix. */
 function renderMessage(message: Message): string {
   const body = message.content.map(renderBlock).join('\n')
+  if (message.role === 'tool') {
+    return `tool result${message.isError === true ? ' (error)' : ''} for call ${message.toolCallId}:\n${body}`
+  }
   return `${message.role}: ${body}`
 }
 
