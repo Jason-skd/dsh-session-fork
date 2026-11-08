@@ -67,10 +67,9 @@ export interface TurnSlice {
    */
   readonly subject: string
   /**
-   * Transfer marker: set on standalone rows emitted for a `/squash` or
-   * `/rebased into` transfer envelope — a `user/message` with a plugin
-   * source (plugin `dsh-session-fork` or `compact`) whose preamble parses
-   * as a transfer of kind `squash`/`rebased-into`
+   * Transfer marker: set on standalone rows emitted for a `/squash`,
+   * `/rebased into`, or `send_message_by_branch` envelope — a `user/message`
+   * whose preamble parses as `squash`, `rebased-into`, or `message`
    * (src/branch-events.ts `parseTransferPreamble`). The transfer is
    * semantically between-turns, but the `agent.inject()` transport can
    * deliver it inside an open turn bracket, so rows are emitted wherever
@@ -86,11 +85,12 @@ export interface TurnSlice {
  * transfer produced the envelope, and the source branch's NAME at event
  * time (`branchEvent.from` successor — the preamble's quoted name, cf.
  * `parseTransferPreamble` in src/branch-events.ts). The session id for the
- * merge edge is resolved from the registry at assembly time; a name no
+ * merge edge for a squash row is resolved from the registry at assembly time;
+ * message and rebased-into rows do not draw an edge. A squash source name no
  * registered branch carries (e.g. after a rename) degrades by omission.
  */
 export interface TransferFacts {
-  readonly kind: 'squash' | 'rebased-into'
+  readonly kind: 'squash' | 'rebased-into' | 'message'
   readonly fromName: string
 }
 
@@ -102,11 +102,12 @@ function firstLine(text: string): string {
 
 /**
  * The transfer facts when `data` is a branch-event transfer envelope user
- * message (a `/squash` merge checkpoint or a `/rebased into` transcript),
- * else null. Detection is two-keyed: a current producer source or a
- * host-migrated historical form, and the machine-contract preamble parsed
- * by `parseTransferPreamble`. Plain notices and dsh's own `/compact`
- * checkpoints do not carry that preamble, so they stay filtered.
+ * message (a `/squash` merge checkpoint, a `/rebased into` transcript, or a
+ * `send_message_by_branch` message), else null. Detection is two-keyed: a
+ * current producer source or a host-migrated historical form, and the
+ * machine-contract preamble parsed by `parseTransferPreamble`. Plain notices
+ * and dsh's own `/compact` checkpoints do not carry that preamble, so every
+ * other plugin message stays filtered.
  */
 function transferFactsOf(data: unknown): TransferFacts | null {
   if (data === null || typeof data !== 'object') return null
