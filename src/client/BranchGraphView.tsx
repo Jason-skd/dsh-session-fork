@@ -172,6 +172,8 @@ function GraphRow({
 interface RowMenu {
   readonly x: number
   readonly y: number
+  /** The row that opened the menu, restored when the popup closes. */
+  readonly returnFocus: HTMLElement | null
   /** The row's data plane; null when opened on a dangling ref (remove only). */
   readonly meta: RowMeta | null
   /**
@@ -411,9 +413,11 @@ export function BranchGraphView({
           viewModel={row}
           meta={metaById.get(row.historyItem.id)}
           onContextMenu={(event, meta) => {
+            const returnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
             setMenu({
               x: event.clientX,
               y: event.clientY,
+              returnFocus,
               meta,
               squash: squashFactsOf(meta.sessionId),
               removeName: branchNameOf(meta.sessionId),
@@ -433,7 +437,15 @@ export function BranchGraphView({
               aria-haspopup="menu"
               onContextMenu={(event) => {
                 event.preventDefault()
-                setMenu({ x: event.clientX, y: event.clientY, meta: null, squash: { registered: false, parentName: null }, removeName: name })
+                const returnFocus = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+                setMenu({
+                  x: event.clientX,
+                  y: event.clientY,
+                  returnFocus,
+                  meta: null,
+                  squash: { registered: false, parentName: null },
+                  removeName: name,
+                })
               }}
             >
               {name}
@@ -441,14 +453,19 @@ export function BranchGraphView({
           ))}
         </div>
       )}
-      {/* The row context menu: portal mode, fixed at the pointer (a
-       * zero-size anchor rect at the recorded coordinates). */}
-      <Menu
-        open={menu !== null}
-        anchor={<span className={css.menuAnchor} aria-hidden="true" />}
-        items={menuEntries}
-        portal
-        getAnchorRect={() => (menu === null ? null : new window.DOMRect(menu.x, menu.y, 0, 0))}
+      {/* The row context menu supports both dsh 0.2.1's anchor-rect API and
+       * 0.2.2's pointer-anchor API while the supported versions overlap. */}
+      <Menu {...{
+        open: menu !== null,
+        anchor: <span className={css.menuAnchor} aria-hidden="true" />,
+        items: menuEntries,
+        portal: true,
+        autoFocus: true,
+        contextual: true,
+        anchorPoint: menu === null ? undefined : { x: menu.x, y: menu.y },
+        getAnchorRect: () => (menu === null ? null : new window.DOMRect(menu.x, menu.y, 0, 0)),
+        returnFocus: () => menu?.returnFocus ?? null,
+      }}
         onSelect={(id) => {
           const current = menu
           setMenu(null)

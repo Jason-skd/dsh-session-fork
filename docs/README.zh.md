@@ -1,9 +1,5 @@
 # dsh-session-fork
 
-`0.4.0` 支持 dsh `0.2.1-rc.2`，替代原先的 dsh `0.1.2-rc.1` 兼容线；请先升级 dsh，再升级本插件。
-
-兼容性开发：先构建旁边的 `../deepseek-harness`，再运行 `bun run test:harness`；可通过 `DSH_HARNESS_DIR` 指定其他目录。检查使用隔离副本连接真实宿主包，覆盖 V4 消息、历史合并记录及 Host、Client 两面的类型。
-
 [English](../README.md) | 简体中文
 
 `dsh-session-fork` 为 `DeepSeek Harness` 引入了类似 Git 的 branch 模型，让多个规模较大、相对独立的任务可以在不同的 dsh 会话中并行进行。
@@ -11,6 +7,10 @@
 与其把所有任务都放在一个线性的对话中，每个任务都可以在自己的 branch 中独立推进。当工作准备合并时，可以使用 `squash` 和 `rebase` 将这些工作重新汇聚到统一的历史中。
 
 本项目是 `DeepSeek Harness` 的插件，无法独立运行。
+
+`0.4.0` 支持 dsh `0.2.1-rc.2`、`0.2.1-rc.3`、`0.2.1-rc.4` 和 `0.2.2-rc.1`，替代原先的 dsh `0.1.2-rc.1` 兼容线；请先升级 dsh，再升级本插件。
+
+兼容性开发：先构建旁边的 `../deepseek-harness`，再运行 `bun run test:harness`；可通过 `DSH_HARNESS_DIR` 指定其他目录。检查使用隔离副本连接真实宿主包，覆盖 V4 消息、历史合并记录及 Host、Client 两面的类型。
 
 ![branch_tab](media/branch_tab.png)
 
