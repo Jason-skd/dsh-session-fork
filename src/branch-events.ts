@@ -79,6 +79,10 @@ export type BranchEventSource =
   }
 
 declare module '@deepseek-ai/dsh-llm' {
+  /** This plugin's summary requests reuse the official compaction purpose. */
+  interface LlmRequestPurposeMap {
+    compaction: true
+  }
   interface MessageSourceMap {
     'dsh-session-fork': { readonly kind: 'dsh-session-fork' } & ContextFormed
     'compact-basic': { readonly kind: 'compact-basic' }
