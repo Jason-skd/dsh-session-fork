@@ -1,6 +1,6 @@
 # dsh-session-fork
 
-English | [简体中文](docs/README.zh.md)
+English | [简体中文](https://github.com/Jason-skd/dsh-session-fork/blob/main/docs/README.zh.md)
 
 `dsh-session-fork` brings a Git-like branch model to `DeepSeek Harness`, making it possible to work on several large, relatively independent tasks in parallel across dsh sessions.
 
@@ -12,7 +12,7 @@ Version `0.4.0` supports dsh `0.2.1-rc.2`. It replaces the previous dsh `0.1.2-r
 
 For compatibility development, build a sibling `../deepseek-harness` checkout and run `bun run test:harness`. Set `DSH_HARNESS_DIR` to use another checkout. The check uses an isolated copy linked to the actual harness packages and checks V4 messages, historical merges, and both Host and Client types.
 
-![branch_tab](docs/media/branch_tab.png)
+![branch_tab](https://raw.githubusercontent.com/Jason-skd/dsh-session-fork/main/docs/media/branch_tab.png)
 
 ## Why branches for parallel development?
 
